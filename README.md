@@ -1,6 +1,12 @@
 # character-background
 Character background settings. Inspired by character.ai
 
+## 參數
+```
+
+```
+
+
 ## 參考資料
 https://medium.com/@adlerai/character-ai-character-profile-definition-example-template-0a5eaf86ec5b
 
