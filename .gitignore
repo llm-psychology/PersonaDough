@@ -1,5 +1,5 @@
 # something
-.md
+*.md
 *.json
 
 # Byte-compiled / optimized / DLL files
