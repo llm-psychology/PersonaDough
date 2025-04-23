@@ -1,4 +1,6 @@
 # pip install faker requests python-dotenv
+#TODO: 長相
+
 import random
 import json
 from faker import Faker
@@ -194,4 +196,5 @@ def main():
 if __name__ == "__main__":
     # 載入環境變數
     load_dotenv()
-    main()
+    for i in range(0,10):
+        main()

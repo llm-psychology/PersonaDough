@@ -1,6 +1,9 @@
 # character-background
 Character background settings. Inspired by character.ai
 `https://medium.com/@adlerai/character-attributes-on-character-ai-7ddb95c12d1b`
+
+社交、能力、天賦按照以下字典隨機產生
+
 ## 人格特質字典
 | 英文                | 中文               |
 |---------------------|--------------------|
