@@ -1,8 +1,6 @@
-# character-background
-Character background settings. Inspired by character.ai
-`https://medium.com/@adlerai/character-attributes-on-character-ai-7ddb95c12d1b`
- 
-社交、能力、天賦按照以下字典隨機產生
+# 引用字典
+
+## 一鍵複製
 
 ## 人格特質字典
 | 英文                | 中文               |
@@ -312,8 +310,6 @@ Character background settings. Inspired by character.ai
 | speed | 速度 |
 | strength | 力量 |
 | wisdom | 智慧 |
-
-
 
 ## 參考資料
 https://medium.com/@adlerai/character-ai-character-profile-definition-example-template-0a5eaf86ec5b
