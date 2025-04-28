@@ -1,7 +1,5 @@
 # 🛠 人格模擬系統 - 技術規格書 (Spec)
 
----
-
 ## 1. 問卷收集 (collect_user_answers)
 
 ### 功能  
@@ -164,7 +162,7 @@ def simulate_persona_answer(chat_messages: List[Dict[str, str]], model: str) -> 
 
 ---
 
-# ✅ 流程總結圖（文字版）
+# 流程總結圖
 
 ```
 問卷 ➔ QA pairs ➔ 格式化 ➔ Embedding ➔ FAISS Index
@@ -180,13 +178,8 @@ def simulate_persona_answer(chat_messages: List[Dict[str, str]], model: str) -> 
 
 ---
 
-# ✍️ 注意事項補充
+# 注意事項補充
 
 - **問卷問題設計得越多樣，模仿效果越好。**
 - **Embedding模型、檢索向量DB和LLM需要相互搭配調整。**
 - **強烈建議加上`similarity threshold`，否則人格容易亂掉。**
-
----
-
-要不要我順便也幫你包成一個乾淨的 Python Class（可以直接一鍵部署的版本）？  
-要的話告訴我，我可以直接幫你寫一版完整可跑的。要嗎？

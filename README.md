@@ -7,6 +7,7 @@ Character background settings. Inspired by character.ai
 
 
 [AI面試官spec](interviewer_spec.md)
+
 [人格特質在這邊](humanoid_spec.md)
 
 ```mermaid
