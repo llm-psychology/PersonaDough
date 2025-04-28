@@ -10,11 +10,13 @@ Character background settings. Inspired by character.ai
 [人格特質在這邊](humanoid_spec.md)
 
 ```mermaid
-      graph LR
-      L_LLM[LLM] --> L_agent[類人代理]
-      input{SWITCH選擇方向} -- 左邊 --> case_single[單次偵測] --> button{是否有按按鈕}
-      button{是否有按按鈕} -- 否 --> input{SWITCH選擇左邊還是右邊}
-      button{是否有按按鈕} -- 是 --> read_id[讀卡]
+    graph LR
+    L_LLM[LLM] --> L_agent[類人代理]
+    R_LLM[LLM] --> R_agent[面試官代理]
+    L_agent[類人代理] --> context[標準化訪談]
+    R_agent[面試官代理] --> context[標準化訪談]
+    context[標準化訪談] --> vdb[FAISS Index]
+    vdb(FAISS Index) --> L_agent[類人代理]
 ```
 
 ## 參考資料
