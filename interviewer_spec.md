@@ -1,4 +1,6 @@
-# 🛠 人格模擬系統 - 技術規格書 (Spec)
+#  interviewer agent 面試官代理
+
+[回主說明](README.md)
 
 ## 1. 問卷收集 (collect_user_answers)
 

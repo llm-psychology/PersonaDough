@@ -5,11 +5,11 @@ Character background settings. Inspired by character.ai
 人格特質、社交、能力關鍵字按照以下字典隨機產生
 [屬性列表在這邊](personality_dic.md)
 
-
 [AI面試官spec](interviewer_spec.md)
 
 [人格特質在這邊](humanoid_spec.md)
 
+## 大致流程圖
 ```mermaid
     graph LR
     L_LLM[LLM] --> L_agent[類人代理]
@@ -19,6 +19,9 @@ Character background settings. Inspired by character.ai
     context[標準化訪談] --> vdb[FAISS Index]
     vdb(FAISS Index) --> L_agent[類人代理]
 ```
+## 開始
+建立.env file裡面放
+`OPENAI_API_KEY=XXXXX`
 
 ## 參考資料
 https://medium.com/@adlerai/character-ai-character-profile-definition-example-template-0a5eaf86ec5b

@@ -1,4 +1,7 @@
-# persona-dough
+# humanoid agent 類人代理
+
+[回主說明](README.md)
+
 基於LLM的agent生成模組
 
 ## 一、系統流程
