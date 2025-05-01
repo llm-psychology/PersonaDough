@@ -9,7 +9,7 @@ Character background settings. Inspired by character.ai
 
 [人格特質在這邊](humanoid_spec.md)
 
-## 大致流程圖
+## 流程圖
 ```mermaid
     graph LR
     L_LLM[LLM] --> L_agent[類人代理]
@@ -19,9 +19,41 @@ Character background settings. Inspired by character.ai
     context[標準化訪談] --> vdb[FAISS Index]
     vdb(FAISS Index) --> L_agent[類人代理]
 ```
-## 開始
-建立.env file裡面放
-`OPENAI_API_KEY=XXXXX`
+## 首次使用
+
+1. ANACONDA的python環境建立
+
+    ```bash
+    conda create --name llm-agent python=3.13
+    ```
+
+2. 啟動環境
+
+    ```bash
+    conda activate llm-agent
+    ```
+
+3. 移動至執行目錄
+
+    ```bash
+    cd {user}\Desktop\persona-dough
+    ```
+
+    ```bash
+    git clone {this-repo}
+    ```
+
+4. 安裝依賴
+
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+2. 在module底下建立.env file，裡面放:
+
+    ```bash
+    OPENAI_API_KEY=XXXXX
+    ```
 
 ## 參考資料
 https://medium.com/@adlerai/character-ai-character-profile-definition-example-template-0a5eaf86ec5b

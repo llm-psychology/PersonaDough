@@ -4,42 +4,10 @@
 import random
 import json
 from faker import Faker
-import requests
-import os
-from dotenv import load_dotenv
-
+from module.LLM_responder import LLM_responder
 # ========================================================================================
 
-class LLM_responder:
-    """LLM api連接相關"""
-    def __init__(self, api_key=None):
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ValueError("需要設定 OPENAI_API_KEY 環境變數或直接傳入 API 金鑰")
 
-    def _call_openai_api(self, prompt, temperature):
-        """呼叫 LLM API"""
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
-        }
-        
-        data = {
-            "model": "gpt-4o",
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": temperature
-        }
-        
-        response = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers=headers,
-            json=data
-        )
-        
-        if response.status_code != 200:
-            raise Exception(f"API 請求失敗: {response.text}")
-            
-        return response.json()["choices"][0]["message"]["content"]
     
 # ========================================================================================
 
@@ -106,7 +74,7 @@ class StoryGenerator(LLM_responder):
         prompt = self._create_story_prompt(character_data)
         
         # 發送 API 請求
-        response = self._call_openai_api(prompt, 0.8)
+        response = self.chat_gpt_4o(prompt, 0.8)
         
         return response
     
@@ -194,7 +162,5 @@ def main():
     print(f"人格特質: {', '.join(character['人格屬性']['人格特質'])}")
 
 if __name__ == "__main__":
-    # 載入環境變數
-    load_dotenv()
     for i in range(0,10):
         main()

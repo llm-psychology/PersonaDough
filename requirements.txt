@@ -1,0 +1,5 @@
+requests
+dotenv
+openai
+faiss-cpu
+faker
