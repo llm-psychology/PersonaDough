@@ -3,11 +3,12 @@ Character background settings. Inspired by character.ai
 `https://medium.com/@adlerai/character-attributes-on-character-ai-7ddb95c12d1b`
  
 人格特質、社交、能力關鍵字按照以下字典隨機產生
+
 [屬性列表在這邊](personality_dic.md)
 
 [AI面試官spec](interviewer_spec.md)
 
-[人格特質在這邊](humanoid_spec.md)
+[類人代理spec](humanoid_spec.md)
 
 ## 流程圖
 ```mermaid

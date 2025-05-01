@@ -1,9 +1,6 @@
-# pip install faker requests python-dotenv
-#TODO: 長相
-
 import random
 import json
-from faker import Faker
+from faker import Faker # update with more accurate zh-TW data
 from module.LLM_responder import LLM_responder
 # ========================================================================================
 
@@ -162,5 +159,5 @@ def main():
     print(f"人格特質: {', '.join(character['人格屬性']['人格特質'])}")
 
 if __name__ == "__main__":
-    for i in range(0,10):
+    for _ in range(0,10):
         main()
