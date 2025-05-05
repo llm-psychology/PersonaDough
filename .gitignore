@@ -3,6 +3,7 @@
 #*.json
 論文spec.md
 .vscode/
+not_upload/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

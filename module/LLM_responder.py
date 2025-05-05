@@ -11,7 +11,8 @@ EMBEDDING_MODEL = "text-embedding-ada-002"
 CHAT_MODEL = "gpt-4o"
 
 class LLM_responder:
-    
+    """LLM api 物件"""  
+
     def __init__(self, api_key=None):
         """LLM api建構子"""   
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")

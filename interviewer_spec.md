@@ -2,6 +2,20 @@
 
 [回主說明](README.md)
 
+# 流程圖
+
+```
+問卷 ➔ QA pairs ➔ 格式化 ➔ Embedding ➔ FAISS Index
+                     ↓
+                 使用者提問
+                     ↓
+               ➔ 查相似片段
+                     ↓
+               ➔ 組 Prompt
+                     ↓
+               ➔ LLM模擬回答
+```
+
 ## 1. 問卷收集 (collect_user_answers)
 
 ### 功能  
@@ -161,24 +175,6 @@ def build_simulation_prompt(retrieved_docs: List[str], user_query: str) -> List[
 def simulate_persona_answer(chat_messages: List[Dict[str, str]], model: str) -> str:
     ...
 ```
-
----
-
-# 流程總結圖
-
-```
-問卷 ➔ QA pairs ➔ 格式化 ➔ Embedding ➔ FAISS Index
-                     ↓
-                 使用者提問
-                     ↓
-               ➔ 查相似片段
-                     ↓
-               ➔ 組 Prompt
-                     ↓
-               ➔ LLM模擬回答
-```
-
----
 
 # 注意事項補充
 

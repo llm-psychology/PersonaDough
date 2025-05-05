@@ -7,7 +7,7 @@
 ## 一、系統流程
 ```mermaid
 graph TD
-    A[python套件生成基本資料] --> B[從字典嵌入隨機屬性]
+    A[faker套件生成基本資料] --> B[從字典嵌入隨機屬性]
     B --> C[LLM生成背景故事]
     C --> D[LLM心理測驗評估]
 ```
@@ -71,14 +71,7 @@ graph TD
 
 ### 3.1 基礎資料生成
 ```python
-from faker import Faker
-
-class BaseInfoGenerator:
-    def __init__(self):
-        self.fake = Faker('zh_TW')
-        
-    def generate(self):
-        return {
+        {
             "姓名": self.fake.name(),
             "年紀": self.fake.random_int(18, 65),
             "性別": self.fake.random_element(["男", "女"]),
@@ -89,16 +82,7 @@ class BaseInfoGenerator:
 
 ### 3.2 屬性隨機嵌入
 ```python
-class AttributeInjector:
-    def __init__(self):
-        self.attributes = {
-            "人格特質": ["謹慎細心", "冒險精神", "情感豐富", "邏輯至上",...],
-            "社交能力": ["領導魅力", "傾聽能力", "幽默風趣",...],
-            "能力屬性": ["時間管理", "多工處理", "創意發想",...]
-        }
-    
-    def inject(self, base_info):
-        return {
+        {
             **base_info,
             "人格特質": self._random_select("人格特質", 3),
             "社交能力": self._random_select("社交能力", 2),
@@ -110,6 +94,9 @@ class AttributeInjector:
 ```
 
 ### 3.3 故事生成提示詞
+
+使用prompt engineering做出故事內容
+
 ```python
 STORY_PROMPT = """
 根據以下個人資料與人格特質，生成詳細背景故事：
@@ -129,6 +116,9 @@ STORY_PROMPT = """
 ```
 
 ### 3.4 心理評估提示詞
+
+(目前沒有計畫做出心理評估)
+
 ```python
 ASSESSMENT_PROMPT = """
 分析以下故事內容，嚴格使用JSON格式回傳：
@@ -151,6 +141,9 @@ ASSESSMENT_PROMPT = """
 (略)
 
 ## 五、輸出示例
+
+(目前沒有計畫做出心理評估)
+
 ```json
 {
   "基本資料": {
@@ -175,3 +168,6 @@ ASSESSMENT_PROMPT = """
 }
 ```
 
+## 六、輸出分析
+
+隨機生成10組代理提示詞，1組提示詞平均消耗849.8個token

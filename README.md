@@ -11,7 +11,7 @@ Character background settings. Inspired by character.ai
 [類人代理spec](humanoid_spec.md)
 
 ## 流程圖
-```mermaid
+```mermaid 
     graph LR
     L_LLM[LLM] --> L_agent[類人代理]
     R_LLM[LLM] --> R_agent[面試官代理]
