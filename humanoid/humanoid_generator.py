@@ -1,7 +1,8 @@
 import random
 import json
 from faker import Faker # update with more accurate zh-TW data
-from ..module.LLM_responder import LLM_responder
+from module.LLM_responder import LLM_responder
+import uuid
 # ========================================================================================
 
 
@@ -13,6 +14,13 @@ class BaseInfoGenerator:
     def __init__(self):
         self.fake = Faker('zh_TW')
 
+    def _generate_uuid(self) -> str:
+        """生成10位16進位UUID"""
+        # 生成完整UUID並轉換為16進位
+        full_uuid = uuid.uuid4().hex
+        # 取前10位
+        return full_uuid[:10]
+
     def generate(self):
         """生成基本個人資料"""
         gender = self.fake.random_element(["男", "女"])
@@ -22,6 +30,7 @@ class BaseInfoGenerator:
             name = self.fake.name_female()
 
         return {
+            "id": self._generate_uuid(),  # 添加UUID
             "姓名": name,
             "年紀": self.fake.random_int(18, 65),
             "性別": gender,
@@ -102,6 +111,19 @@ class StoryGenerator(LLM_responder):
 
 # ========================================================================================
 
+class ToneGenerator(LLM_responder):
+    """語調說話方式生成器"""
+    
+    def generate(self, full_character_data):
+        """使用 LLM 生成語調說話方式 gpt-4o gpt-4.1都可以"""
+        
+        prefix = "你是一位語言與人格建模專家。根據以下人物的基本資料，請推論出這個人日常說話時的語氣特徵、常見詞彙風格、語調節奏，並描述其語言風格：\n基本資料："
+        usr = "用一段小短文，不要列點的，用1000字以內，具體描述這個人說話的語氣、節奏、常用語、說話方式等，可以提出範例句子。避免太抽象。"
+        # 發送 API 請求
+        response = self.full_chat_gpt_4o(prefix + json.dumps(full_character_data, ensure_ascii=False), usr, 0.7)
+        
+        return response
+    
 # ========================================================================================
 
 class CharacterGenerator:
@@ -110,6 +132,7 @@ class CharacterGenerator:
         self.base_generator = BaseInfoGenerator()
         self.attribute_injector = AttributeInjector()
         self.story_generator = StoryGenerator()
+        self.tone_generator = ToneGenerator()
     
     def generate_character(self):
         """生成完整角色資料"""
@@ -120,16 +143,21 @@ class CharacterGenerator:
         character_data = self.attribute_injector.inject(base_info)
         
         # 步驟 3: 生成背景故事
-        story = self.story_generator.generate(character_data)
+        story = self.story_generator.generate(character_data).replace("\n","")
         character_data["生平故事"] = story
         
+        # 步驟 4: 生成語言行為
+        tone = self.tone_generator.generate(character_data).replace("\n","")
+        character_data["語言行為"] = tone
+
         return character_data
     
     def save_character(self, character_data, filename=None):
         """將生成的角色資料保存為 JSON 檔案"""
         if filename is None:
             name = character_data["基本資料"]["姓名"]
-            filename = f"humanoid_database{name}.json"
+            id = character_data["基本資料"]["id"]
+            filename = f"humanoid/humanoid_database/{id}_{name}.json"
         
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(character_data, f, ensure_ascii=False, indent=2)
@@ -160,5 +188,5 @@ def main():
     print(f"人格特質: {', '.join(character['人格屬性']['人格特質'])}")
 
 if __name__ == "__main__":
-    for _ in range(0,10):
+    for _ in range(0,1):
         main()

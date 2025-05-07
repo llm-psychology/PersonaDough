@@ -50,7 +50,7 @@ class LLM_responder:
     def full_chat_gpt_4o(self, sys_prompt: str="", usr_prompt: str="", temperature: int=0.7)->str:
         """使用 chat.completions API透過gpt-4o的自定義回答"單輪"對話
 
-        usage: full_chat_gpt_4o("你現在是我的教學小助手，不可以誤人子弟", "回答一個題目是: 1+1=多少?", 0.3)"""
+        usage: full_chat_gpt_4o("你現在是數學教學小助手，不可以誤人子弟亂回答，要教給五歲小孩聽的", "回答一個題目是: 1+1=多少?", 0.3)"""
         model = CHAT_MODEL
         prompt=[
             {"role": "system", "content": sys_prompt},
