@@ -1,7 +1,7 @@
 import faiss
 from typing import List, Dict
 import openai
-from module.LLM_responder import LLM_responder
+from ..module.LLM_responder import LLM_responder
 import numpy as np
 
 class Interviewer(LLM_responder):

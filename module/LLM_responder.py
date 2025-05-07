@@ -41,12 +41,23 @@ class LLM_responder:
     
 
     def chat_gpt_4o(self, prompt: str, temperature: int)->str:
-        """使用 chat.completions API透過gpt-4o回答問題"""
+        """使用 chat.completions API透過gpt-4o的user回答單輪對話"""
         model = CHAT_MODEL
         prompt = [{"role": "user", "content": prompt}]
         res = self._call_chat_openai_api(model, prompt, temperature)
         return res.choices[0].message.content
-            
+    
+    def full_chat_gpt_4o(self, sys_prompt: str="", usr_prompt: str="", temperature: int=0.7)->str:
+        """使用 chat.completions API透過gpt-4o的自定義回答"單輪"對話
+
+        usage: full_chat_gpt_4o("你現在是我的教學小助手，不可以誤人子弟", "回答一個題目是: 1+1=多少?", 0.3)"""
+        model = CHAT_MODEL
+        prompt=[
+            {"role": "system", "content": sys_prompt},
+            {"role": "user", "content": usr_prompt},
+        ]
+        res = self._call_chat_openai_api(model, prompt, temperature)
+        return res.choices[0].message.content
     
     def simulate_persona_answer(self, chat_messages: List[Dict[str, str]], model: str = CHAT_MODEL) -> str:
         """使用 chat.completions API透過gpt-4o回答問題，相似的function: chat_gpt_4o()"""

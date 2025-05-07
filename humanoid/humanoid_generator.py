@@ -1,7 +1,7 @@
 import random
 import json
 from faker import Faker # update with more accurate zh-TW data
-from module.LLM_responder import LLM_responder
+from ..module.LLM_responder import LLM_responder
 # ========================================================================================
 
 
@@ -94,8 +94,9 @@ class StoryGenerator(LLM_responder):
         要求：
         1. 包含童年經歷、重大人生事件、教育背景、家庭背景、對話模式
         2. 說明職業選擇與興趣愛好
-        3. 字數500字
+        3. 字數500字或以上
         4. 使用臺灣在地化用語
+        5. 年齡和人生經歷須符合
         """
         return prompt
 
@@ -128,7 +129,7 @@ class CharacterGenerator:
         """將生成的角色資料保存為 JSON 檔案"""
         if filename is None:
             name = character_data["基本資料"]["姓名"]
-            filename = f"{name}.json"
+            filename = f"humanoid_database{name}.json"
         
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(character_data, f, ensure_ascii=False, indent=2)

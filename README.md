@@ -4,11 +4,11 @@ Character background settings. Inspired by character.ai
  
 人格特質、社交、能力關鍵字按照以下字典隨機產生
 
-[屬性列表在這邊](personality_dic.md)
+[屬性列表在這邊](humanoid/personality_dic.md)
 
-[AI面試官spec](interviewer_spec.md)
+[AI面試官spec](interviewer/interviewer_spec.md)
 
-[類人代理spec](humanoid_spec.md)
+[類人代理spec](humanoid/humanoid_spec.md)
 
 ## 流程圖
 ```mermaid 
