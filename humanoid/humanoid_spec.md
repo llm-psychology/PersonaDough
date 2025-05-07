@@ -1,6 +1,6 @@
 # humanoid agent 類人代理
 
-[回主說明](README.md)
+[回主說明](../README.md)
 
 基於LLM的agent生成模組
 

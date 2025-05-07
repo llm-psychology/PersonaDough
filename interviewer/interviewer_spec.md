@@ -1,6 +1,6 @@
 #  interviewer agent 面試官代理
 
-[回主說明](README.md)
+[回主說明](../README.md)
 
 # 流程圖
 

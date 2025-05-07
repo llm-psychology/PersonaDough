@@ -1,6 +1,6 @@
 # 引用字典
 
-[回主說明](README.md)
+[回主說明](../README.md)
 
 所有資料皆取自@adlerai
 
