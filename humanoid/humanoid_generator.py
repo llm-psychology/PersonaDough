@@ -188,5 +188,5 @@ def main():
     print(f"人格特質: {', '.join(character['人格屬性']['人格特質'])}")
 
 if __name__ == "__main__":
-    for _ in range(0,1):
+    for _ in range(0,5):
         main()

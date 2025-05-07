@@ -113,12 +113,14 @@ class Interviewer(LLM_responder):
             
         return embeddings, index, docs, qa_pairs
 
-    def process_questions_in_batches(self, loader: DataLoader) -> List[Dict[str, str]]:
+    def process_questions_in_batches(self, loader: DataLoader, persona_loader: PersonaLoader = None, persona_id: str = None) -> List[Dict[str, str]]:
         """
         批次處理問題
         
         Args:
             loader (DataLoader): 問題載入器
+            persona_loader (PersonaLoader, optional): 角色載入器
+            persona_id (str, optional): 要使用的角色ID
             
         Returns:
             List[Dict[str, str]]: 所有問答對
@@ -126,6 +128,15 @@ class Interviewer(LLM_responder):
         all_qa_pairs = []
         questions = loader.get_all_questions()
         total_questions = len(questions)
+        
+        # 如果提供了角色ID，獲取角色資料
+        persona_data = None
+        if persona_loader and persona_id:
+            persona_data = persona_loader.get_persona_by_id(persona_id)
+            if not persona_data:
+                print(f"找不到ID為 {persona_id} 的角色")
+                return all_qa_pairs
+            print(f"\n使用角色：{persona_data['基本資料']['姓名']}")
         
         for i in range(0, total_questions, self.batch_size):
             batch_questions = questions[i:i + self.batch_size]
@@ -135,20 +146,33 @@ class Interviewer(LLM_responder):
             # 取得當前批次的問題內容
             batch_question_contents = [q.content for q in batch_questions]
             
-            # 收集使用者回答
-            batch_qa_pairs = self.collect_user_answers(batch_question_contents)
-            all_qa_pairs.extend(batch_qa_pairs)
+            # 如果有角色資料，使用角色自動回答
+            if persona_data:
+                batch_qa_pairs = []
+                for question in batch_question_contents:
+                    # 使用 full_chat_gpt_4o 讓角色回答問題
+                    # 這裡的 prompt 可以根據需求自定義
+                    sys_prompt = f"你現在是 {persona_data['基本資料']['姓名']}，請根據你的背景和性格回答問題。"
+                    answer = self.full_chat_gpt_4o(sys_prompt, question)
+                    batch_qa_pairs.append({"q": question, "a": answer})
+                    print(f"\n問題：{question}")
+                    print(f"回答：{answer}")
+            else:
+                # 如果沒有角色資料，則收集使用者回答
+                batch_qa_pairs = self.collect_user_answers(batch_question_contents)
             
+            all_qa_pairs.extend(batch_qa_pairs)
             print(f"完成批次 {i//self.batch_size + 1}")
             
         return all_qa_pairs
 
+    def start_prompt():
+        pass
 # ========== Main Example Flow ==========
 if __name__ == "__main__":
     interviewer = Interviewer()
     loader = DataLoader()
-    persona = PersonaLoader()
-
+    persona_loader = PersonaLoader()
     
     # 檢查是否要載入現有資料庫
     #load_existing = input("是否要載入現有資料庫？(y/n): ").lower() == 'y'
@@ -167,8 +191,21 @@ if __name__ == "__main__":
         print(f"總共有 {loader.get_question_count()} 個問題")
         print(f"將以每 {interviewer.batch_size} 個問題為一批次進行")
         
+        # 選擇是否使用角色自動回答
+        use_persona = input("是否要使用角色自動回答問題？(y/n): ").lower() == 'y'
+        persona_id = None
+        
+        if use_persona:
+            # 顯示所有可用角色
+            persona_list = persona_loader.get_persona_list()
+            print("\n可用的角色：")
+            for persona in persona_list:
+                print(f"ID: {persona['id']}, 姓名: {persona['姓名']}, 性別: {persona['性別']}, 年紀: {persona['年紀']}")
+            
+            persona_id = input("\n請輸入要使用的角色ID：")
+        
         # 批次處理問題
-        qa_pairs = interviewer.process_questions_in_batches(loader)
+        qa_pairs = interviewer.process_questions_in_batches(loader, persona_loader, persona_id)
         docs = interviewer.format_qa_pairs(qa_pairs)
         
         print("\n=== 建立記憶庫 ===")
