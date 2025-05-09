@@ -3,6 +3,9 @@ from typing import List, Dict
 import numpy as np
 import os
 import json
+import asyncio
+import aiofiles
+import time
 
 from module.LLM_responder import LLM_responder
 from module.QA_loader import QaLoader
@@ -18,7 +21,7 @@ class Interviewer(LLM_responder):
 
     # ========== 1. Collect user answers ==========
     # 只有在humanoid_database是空的時候才會用到
-    def collect_user_answers(self, question_list: List[str]) -> List[Dict[str, str]]:
+    async def collect_user_answers(self, question_list: List[str]) -> List[Dict[str, str]]:
         qa_pairs = []
         for q in question_list:
             a = input(f"{q}\n> ")
@@ -40,8 +43,8 @@ class Interviewer(LLM_responder):
         return index
 
     # ========== 5. Retrieve Similar Docs ==========
-    def retrieve_similar_docs(self, query: str, index: faiss.IndexFlatL2, docs: List[str], top_k: int = 3, similarity_threshold: float = 0.7) -> tuple:
-        res = self._call_embeddings_openai_api([query])
+    async def retrieve_similar_docs(self, query: str, index: faiss.IndexFlatL2, docs: List[str], top_k: int = 3, similarity_threshold: float = 0.7) -> tuple:
+        res = await self._call_embeddings_openai_api([query])
         query_vector = np.array([res.data[0].embedding])
         D, I = index.search(query_vector, top_k)
         similar_docs = [docs[i] for i in I[0]]  # 移除距離過濾
@@ -60,7 +63,7 @@ class Interviewer(LLM_responder):
     # 使用父類別 LLM_responder 的 simulate_persona_answer 方法
 
     # ========== 8. Save RAG Database ==========
-    def save_rag_database(self, name: str, embeddings: np.ndarray, index: faiss.IndexFlatL2, docs: List[str], qa_pairs: List[Dict[str, str]]):
+    async def save_rag_database(self, name: str, embeddings: np.ndarray, index: faiss.IndexFlatL2, docs: List[str], qa_pairs: List[Dict[str, str]]):
         """
         儲存 RAG 資料庫
         
@@ -78,11 +81,11 @@ class Interviewer(LLM_responder):
         faiss.write_index(index, os.path.join(db_dir, "index.faiss"))
         
         # 儲存原始問答對
-        with open(os.path.join(db_dir, "qa_pairs.json"), "w", encoding="utf-8") as f:
-            json.dump(qa_pairs, f, ensure_ascii=False, indent=2)
+        async with aiofiles.open(os.path.join(db_dir, "qa_pairs.json"), "w", encoding="utf-8") as f:
+            await f.write(json.dumps(qa_pairs, ensure_ascii=False, indent=2))
 
     # ========== 9. Load RAG Database ==========
-    def load_rag_database(self, name: str) -> tuple:
+    async def load_rag_database(self, name: str) -> tuple:
         """
         載入 RAG 資料庫
         
@@ -98,20 +101,21 @@ class Interviewer(LLM_responder):
         index = faiss.read_index(os.path.join(db_dir, "index.faiss"))
         
         # 載入原始問答對
-        with open(os.path.join(db_dir, "qa_pairs.json"), "r", encoding="utf-8") as f:
-            qa_pairs = json.load(f)
+        async with aiofiles.open(os.path.join(db_dir, "qa_pairs.json"), "r", encoding="utf-8") as f:
+            content = await f.read()
+            qa_pairs = json.loads(content)
             
         # 動態生成 docs
         docs = self.format_qa_pairs(qa_pairs)
             
         return index, docs, qa_pairs
 
-    def process_questions_in_batches(self, loader: QaLoader, persona_loader: PersonaLoader = None, persona_id: str = None) -> List[Dict[str, str]]:
+    async def process_questions_in_batches(self, qaloader: QaLoader, persona_loader: PersonaLoader = None, persona_id: str = None) -> List[Dict[str, str]]:
         """
         批次處理問題
         
         Args:
-            loader (DataLoader): 問題載入器
+            qaloader (DataLoader): 問題載入器
             persona_loader (PersonaLoader, optional): 角色載入器
             persona_id (str, optional): 要使用的角色ID
             
@@ -119,7 +123,7 @@ class Interviewer(LLM_responder):
             List[Dict[str, str]]: 所有問答對
         """
         all_qa_pairs = []
-        questions = loader.get_all_questions()
+        questions = qaloader.get_all_questions()
         total_questions = len(questions)
         
         # 如果提供了角色ID，獲取角色資料
@@ -179,7 +183,7 @@ class Interviewer(LLM_responder):
                 print("正在生成回答...")
                 sys_prompt = f"你現在是\n {json.dumps(persona_data, ensure_ascii=False)}"
                 
-                answer = self.full_chat_gpt_41(sys_prompt, question_batch_prompt, 0.7)
+                answer = await self.full_chat_gpt_41(sys_prompt, question_batch_prompt, 0.7)
 
                 try:
                     # 解析 JSON 回答
@@ -210,14 +214,14 @@ class Interviewer(LLM_responder):
             else:
                 # 如果沒有角色資料，則收集使用者回答
                 print("沒有角色資料，將收集你的回答")
-                batch_qa_pairs = self.collect_user_answers(batch_question_contents)
+                batch_qa_pairs = await self.collect_user_answers(batch_question_contents)
             
             all_qa_pairs.extend(batch_qa_pairs)
             print(f"完成批次 {i//self.batch_size + 1}")
             
         return all_qa_pairs
 
-    def process_dynamic_interview(self, persona_id: str, persona_data: dict, num_rounds: int = 10) -> List[Dict[str, str]]:
+    async def process_dynamic_interview(self, persona_id: str, persona_data: dict, num_rounds: int = 10) -> List[Dict[str, str]]:
         """
         進行動態訪談，根據回答產生後續問題
         
@@ -263,7 +267,7 @@ class Interviewer(LLM_responder):
             """
             
             sys_prompt = f"你現在是\n {json.dumps(persona_data, ensure_ascii=False)}"
-            answer = self.full_chat_gpt_41(sys_prompt, question_batch_prompt, 0.7)
+            answer = await self.full_chat_gpt_41(sys_prompt, question_batch_prompt, 0.7)
             
             try:
                 # 解析回答
@@ -277,7 +281,7 @@ class Interviewer(LLM_responder):
                 current_context += f"Q：{current_question}\nA：{current_answer}\n\n"
                 
                 # 使用 MINI_MODEL 產生下一個問題
-                sys_prompt = f"""根據以下訪談內容，產生一個深入的問題。問題應該要：
+                sys_prompt = f"""你是一個專業的訪談者，根據以下訪談內容，產生一個深入的問題。問題應該要：
                 1. 基於受訪者的回答
                 2. 引導出更多個人故事或想法
                 3. 保持對話的連貫性
@@ -287,9 +291,9 @@ class Interviewer(LLM_responder):
                 訪談內容：
                 {current_context}
 
-                請只輸出問題，不要有任何其他文字。"""
+                請只輸出一個問題，不要有任何其他文字，也不要過度重複敘述題幹。"""
                 
-                next_question = self.full_chat_gpt_41_mini("你是一個專業的訪談者，善於提出深入的問題", ask_prompt, 0.7)
+                next_question = await self.full_chat_gpt_41_mini(sys_prompt, ask_prompt, 0.9)
                 next_question = next_question.strip()
                 
                 # 如果不是最後一回合，加入新問題
@@ -304,17 +308,41 @@ class Interviewer(LLM_responder):
         return qa_pairs
 
 # ========== Main Example Flow ==========
-if __name__ == "__main__":
-    interviewer = Interviewer()
-    loader = QaLoader()
-    persona_loader = PersonaLoader()
+async def process_persona(persona, interviewer, qaloader, persona_loader, rag_data_dir, existing_dbs):
+    persona_id = persona['id']
     
-    # 獲取所有角色列表
+    if persona_id in existing_dbs:
+        print(f"\n跳過角色 {persona_id}（資料庫已存在）")
+        return
+    
+    print(f"\n處理角色：{persona['姓名']} (ID: {persona_id})")
+    print(f"總共有 {qaloader.get_question_count()} 個問題")
+    print(f"將以每 {interviewer.batch_size} 個問題為一批次進行")
+
+    qa_pairs = await interviewer.process_questions_in_batches(qaloader, persona_loader, persona_id)
+    docs = interviewer.format_qa_pairs(qa_pairs)
+
+    print("\n=== 開始動態訪談 ===")
+    qa_pairs += await interviewer.process_dynamic_interview(persona_id, persona, num_rounds=10)
+
+    print("\n=== 建立記憶庫 ===")
+    embeddings = await interviewer.generate_embedding(docs)
+    index = interviewer.build_vector_index(embeddings)
+
+    await interviewer.save_rag_database(persona_id, embeddings, index, docs, qa_pairs)
+    print(f"資料庫已自動儲存為：{persona_id}")
+
+async def main():
+    interviewer = Interviewer()
+    qaloader = QaLoader()
+    await qaloader.wait_until_ready()
+    persona_loader = PersonaLoader()
+    await persona_loader.wait_until_ready()
+
     persona_list = persona_loader.get_persona_list()
     rag_data_dir = "interviewer/rag_database"
     os.makedirs(rag_data_dir, exist_ok=True)
     
-    # 獲取已存在的資料庫目錄
     existing_dbs = set()
     if os.path.exists(rag_data_dir):
         existing_dbs = set(d for d in os.listdir(rag_data_dir) 
@@ -322,36 +350,23 @@ if __name__ == "__main__":
     
     print("\n=== 開始處理角色資料庫 ===")
     print(f"總共有 {len(persona_list)} 個角色")
-    
-    for persona in persona_list:
-        persona_id = persona['id']
-        
-        # 如果資料庫已存在，跳過
-        if persona_id in existing_dbs:
-            print(f"\n跳過角色 {persona_id}（資料庫已存在）")
-            continue
-            
-        print(persona)
-        print(f"\n處理角色：{persona['姓名']} (ID: {persona_id})")
-        print(f"總共有 {loader.get_question_count()} 個問題")
-        print(f"將以每 {interviewer.batch_size} 個問題為一批次進行")
-        
-        # 批次處理問題
-        qa_pairs = interviewer.process_questions_in_batches(loader, persona_loader, persona_id) # 一個batch大概4000token，一個persona會做4個batch
-        docs = interviewer.format_qa_pairs(qa_pairs)
-        
-        # 進行動態訪談
-        print("\n=== 開始動態訪談 ===")
-        qa_pairs += interviewer.process_dynamic_interview(persona_id, persona, num_rounds=10)
-        
-        print("\n=== 建立記憶庫 ===")
-        embeddings = interviewer.generate_embedding(docs)
-        index = interviewer.build_vector_index(embeddings)
-        
-        # 自動使用 persona_id 作為資料庫名稱
-        interviewer.save_rag_database(persona_id, embeddings, index, docs, qa_pairs)
-        print(f"資料庫已自動儲存為：{persona_id}")
-    
+
+    # 建立最大一組三個 coroutine 任務
+
+    sem = asyncio.Semaphore(3)
+
+    async def limited_process_persona(persona):
+        async with sem:
+            await process_persona(persona, interviewer, qaloader, persona_loader, rag_data_dir, existing_dbs)
+
+    await asyncio.gather(*(limited_process_persona(p) for p in persona_list))
     print("\n=== 所有角色處理完成 ===")
+
+if __name__ == "__main__":
+    # 五個persona共270秒
+    start = time.time()
+    asyncio.run(main())
+    end = time.time()
+    print(f"\n✅ 全部任務完成，共花費 {end - start:.2f} 秒")
 
 

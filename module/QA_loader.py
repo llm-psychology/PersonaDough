@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 from typing import List
+import aiofiles
+import asyncio
 
 @dataclass
 class Question:
@@ -9,10 +11,9 @@ class Question:
 
 class QaLoader:
     """
-    感覺可以改名叫做question loader 因為還會有persona loader
     usage:    
     loader = DataLoader()
-    questions = loader.get_all_questions()
+    questions = await loader.get_all_questions()
     print(f"總共有 {loader.get_question_count()} 個問題")
     
     # 顯示前三個問題作為範例
@@ -32,13 +33,17 @@ class QaLoader:
         """
         self.file_path = file_path
         self.questions: List[Question] = []
-        self._load_questions()
+        # 為避免race condition
+        self._load_task = asyncio.create_task(self._load_questions())
     
-    def _load_questions(self):
+    async def wait_until_ready(self):
+        await self._load_task
+
+    async def _load_questions(self):
         """從檔案中載入問題"""
         try:
-            with open(self.file_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
+            async with aiofiles.open(self.file_path, 'r', encoding='utf-8') as f:
+                lines = await f.readlines()
                 
             # 過濾空行並創建問題物件
             question_id = 1
@@ -68,7 +73,7 @@ class QaLoader:
         """獲取問題總數"""
         return len(self.questions)
 
-    def add_question(self, content: str) -> Question:
+    async def add_question(self, content: str) -> Question:
         """
         添加單一問題
         
@@ -81,10 +86,10 @@ class QaLoader:
         new_id = len(self.questions) + 1
         new_question = Question(id=new_id, content=content)
         self.questions.append(new_question)
-        self._save_questions()
+        await self._save_questions()
         return new_question
 
-    def add_questions(self, contents: List[str]) -> List[Question]:
+    async def add_questions(self, contents: List[str]) -> List[Question]:
         """
         批量添加問題
         
@@ -96,20 +101,20 @@ class QaLoader:
         """
         new_questions = []
         for content in contents:
-            new_question = self.add_question(content)
+            new_question = await self.add_question(content)
             new_questions.append(new_question)
         return new_questions
 
-    def _save_questions(self):
+    async def _save_questions(self):
         """將問題保存到檔案"""
         try:
-            with open(self.file_path, 'w', encoding='utf-8') as f:
+            async with aiofiles.open(self.file_path, 'w', encoding='utf-8') as f:
                 for question in self.questions:
-                    f.write(f"{question.content}\n")
+                    await f.write(f"{question.content}\n")
         except Exception as e:
             print(f"保存問題時發生錯誤：{str(e)}")
 
-    def update_question(self, question_id: int, new_content: str) -> bool:
+    async def update_question(self, question_id: int, new_content: str) -> bool:
         """
         更新指定 ID 的問題內容
         
@@ -123,11 +128,11 @@ class QaLoader:
         for question in self.questions:
             if question.id == question_id:
                 question.content = new_content
-                self._save_questions()
+                await self._save_questions()
                 return True
         return False
 
-    def delete_question(self, question_id: int) -> bool:
+    async def delete_question(self, question_id: int) -> bool:
         """
         刪除指定 ID 的問題
         
@@ -143,31 +148,35 @@ class QaLoader:
                 # 重新編號
                 for j in range(i, len(self.questions)):
                     self.questions[j].id = j + 1
-                self._save_questions()
+                await self._save_questions()
                 return True
         return False
 
 # 使用範例
-if __name__ == "__main__":
-    loader = QaLoader()
+async def main():
+    qaloader = QaLoader()
+    await qaloader.wait_until_ready()
     '''
     # 添加單一問題
-    new_question = loader.add_question("這是一個新的測試問題")
+    new_question = await loader.add_question("這是一個新的測試問題")
     print(f"新增問題：{new_question.id}: {new_question.content}")
     
     # 批量添加問題
-    new_questions = loader.add_questions([
+    new_questions = await loader.add_questions([
         "這是第二個測試問題",
         "這是第三個測試問題"
     ])
     print(f"批量新增了 {len(new_questions)} 個問題")
     
     # 更新問題
-    loader.update_question(1, "這是更新後的問題")
+    await loader.update_question(1, "這是更新後的問題")
     '''
     
     # 顯示所有問題
-    questions = loader.get_all_questions()
-    print(f"\n總共有 {loader.get_question_count()} 個問題")
+    questions = qaloader.get_all_questions()
+    print(f"\n總共有 {qaloader.get_question_count()} 個問題")
     for question in questions:
         print(f"問題 {question.id}: {question.content}")
+
+if __name__ == "__main__":
+    asyncio.run(main())

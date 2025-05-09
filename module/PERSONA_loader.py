@@ -3,6 +3,8 @@ import json
 from typing import List, Dict, Optional
 import shutil
 from datetime import datetime
+import aiofiles
+import asyncio
 
 class PersonaLoader:
     """角色資料載入器"""
@@ -10,9 +12,13 @@ class PersonaLoader:
         self.database_dir = "humanoid/humanoid_database"
         self.backup_dir = "humanoid/humanoid_database/backup"
         self.personas = {}  # 儲存所有載入的角色資料
-        self._load_all_personas()
+        # 為避免race condition
+        self._load_task = asyncio.create_task(self._load_all_personas())
+    
+    async def wait_until_ready(self):
+        await self._load_task
 
-    def _load_all_personas(self):
+    async def _load_all_personas(self):
         """載入資料庫目錄下的所有角色資料"""
         if not os.path.exists(self.database_dir):
             os.makedirs(self.database_dir, exist_ok=True)
@@ -22,8 +28,9 @@ class PersonaLoader:
             if filename.endswith('.json'):
                 file_path = os.path.join(self.database_dir, filename)
                 try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        persona_data = json.load(f)
+                    async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                        content = await f.read()
+                        persona_data = json.loads(content)
                         persona_id = persona_data["基本資料"]["id"]
                         self.personas[persona_id] = persona_data
                 except Exception as e:
@@ -60,7 +67,7 @@ class PersonaLoader:
             for persona in self.personas.values()
         ]
 
-    def add_persona(self, persona_data: Dict) -> bool:
+    async def add_persona(self, persona_data: Dict) -> bool:
         """
         添加新角色
         
@@ -82,8 +89,8 @@ class PersonaLoader:
                 return False
                 
             # 保存檔案
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(persona_data, f, ensure_ascii=False, indent=2)
+            async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+                await f.write(json.dumps(persona_data, ensure_ascii=False, indent=2))
             
             # 更新記憶體中的資料
             self.personas[persona_id] = persona_data
@@ -93,7 +100,7 @@ class PersonaLoader:
             print(f"添加角色時發生錯誤：{str(e)}")
             return False
 
-    def update_persona(self, persona_id: str, new_data: Dict) -> bool:
+    async def update_persona(self, persona_id: str, new_data: Dict) -> bool:
         """
         更新角色資料
         
@@ -110,7 +117,7 @@ class PersonaLoader:
                 return False
                 
             # 備份原始檔案
-            self._backup_persona(persona_id)
+            await self._backup_persona(persona_id)
             
             # 更新檔案
             old_data = self.personas[persona_id]
@@ -118,8 +125,8 @@ class PersonaLoader:
             filename = f"{persona_id}_{name}.json"
             file_path = os.path.join(self.database_dir, filename)
             
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(new_data, f, ensure_ascii=False, indent=2)
+            async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+                await f.write(json.dumps(new_data, ensure_ascii=False, indent=2))
             
             # 更新記憶體中的資料
             self.personas[persona_id] = new_data
@@ -129,7 +136,7 @@ class PersonaLoader:
             print(f"更新角色時發生錯誤：{str(e)}")
             return False
 
-    def delete_persona(self, persona_id: str) -> bool:
+    async def delete_persona(self, persona_id: str) -> bool:
         """
         刪除角色
         
@@ -145,7 +152,7 @@ class PersonaLoader:
                 return False
                 
             # 備份原始檔案
-            self._backup_persona(persona_id)
+            await self._backup_persona(persona_id)
             
             # 刪除檔案
             persona_data = self.personas[persona_id]
@@ -163,7 +170,7 @@ class PersonaLoader:
             print(f"刪除角色時發生錯誤：{str(e)}")
             return False
 
-    def _backup_persona(self, persona_id: str):
+    async def _backup_persona(self, persona_id: str):
         """備份角色資料"""
         try:
             if not os.path.exists(self.backup_dir):
@@ -245,7 +252,7 @@ class PersonaLoader:
                 
         return stats
 
-    def reload(self):
+    async def reload(self):
         """重新載入所有角色資料"""
         self.personas.clear()
-        self._load_all_personas()
+        await self._load_all_personas()

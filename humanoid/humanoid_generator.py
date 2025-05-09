@@ -3,6 +3,9 @@ import json
 from faker import Faker # update with more accurate zh-TW data
 from module.LLM_responder import LLM_responder
 import uuid
+import asyncio
+import aiofiles
+import time
 # ========================================================================================
 
 
@@ -74,13 +77,13 @@ class AttributeInjector:
 class StoryGenerator(LLM_responder):
     """背景故事生成器"""
     
-    def generate(self, character_data):
+    async def generate(self, character_data):
         """使用 LLM 生成背景故事"""
         # 準備提示詞
         prompt = self._create_story_prompt(character_data)
         
         # 發送 API 請求
-        response = self.chat_gpt_4o(prompt, 0.8)
+        response = await self.chat_gpt_4o(prompt, 0.8)
         
         return response
     
@@ -114,13 +117,13 @@ class StoryGenerator(LLM_responder):
 class ToneGenerator(LLM_responder):
     """語調說話方式生成器"""
     
-    def generate(self, full_character_data):
+    async def generate(self, full_character_data):
         """使用 LLM 生成語調說話方式 gpt-4o gpt-4.1都可以"""
         
         prefix = "你是一位語言與人格建模專家。根據以下人物的基本資料，請推論出這個人日常說話時的語氣特徵、常見詞彙風格、語調節奏，並描述其語言風格：\n基本資料："
         usr = "用一段小短文，不要列點的，用1000字以內，具體描述這個人說話的語氣、節奏、常用語、說話方式等，可以提出範例句子。避免太抽象。"
         # 發送 API 請求
-        response = self.full_chat_gpt_4o(prefix + json.dumps(full_character_data, ensure_ascii=False), usr, 0.7)
+        response = await self.full_chat_gpt_4o(prefix + json.dumps(full_character_data, ensure_ascii=False), usr, 0.7)
         
         return response
     
@@ -134,7 +137,7 @@ class CharacterGenerator:
         self.story_generator = StoryGenerator()
         self.tone_generator = ToneGenerator()
     
-    def generate_character(self):
+    async def generate_character(self):
         """生成完整角色資料"""
         # 步驟 1: 生成基本資料
         base_info = self.base_generator.generate()
@@ -143,42 +146,43 @@ class CharacterGenerator:
         character_data = self.attribute_injector.inject(base_info)
         
         # 步驟 3: 生成背景故事
-        story = self.story_generator.generate(character_data).replace("\n","")
+        story = await self.story_generator.generate(character_data)
+        story = story.replace("\n","")
         character_data["生平故事"] = story
         
         # 步驟 4: 生成語言行為
-        tone = self.tone_generator.generate(character_data).replace("\n","")
+        tone = await self.tone_generator.generate(character_data)
+        tone = tone.replace("\n","")
         character_data["語言行為"] = tone
 
         return character_data
     
-    def save_character(self, character_data, filename=None):
+    async def save_character(self, character_data, filename=None):
         """將生成的角色資料保存為 JSON 檔案"""
         if filename is None:
             name = character_data["基本資料"]["姓名"]
             id = character_data["基本資料"]["id"]
             filename = f"humanoid/humanoid_database/{id}_{name}.json"
         
-        with open(filename, 'w', encoding='utf-8') as f:
-            json.dump(character_data, f, ensure_ascii=False, indent=2)
-        
+        async with aiofiles.open(filename, "w", encoding="utf-8") as f:
+            await f.write(json.dumps(character_data, ensure_ascii=False, indent=2))
+
         return filename
 
 
 # ========================================================================================
 
-def main():
-    
+async def main():
     # 建立角色生成器
     generator = CharacterGenerator()
     
     # 生成角色
     print("開始生成角色...")
-    character = generator.generate_character()
+    character = await generator.generate_character()
     
     # 儲存角色資料
-    filename = generator.save_character(character)
-    print(f"角色生成完成! 已儲存至 {filename}")
+    filename = await generator.save_character(character)
+    print(f"\n===========================================\n角色生成完成! 已儲存至 {filename}")
     
     # 顯示摘要資訊
     print(f"\n角色摘要:")
@@ -187,6 +191,14 @@ def main():
     print(f"年齡: {character['基本資料']['年紀']}")
     print(f"人格特質: {', '.join(character['人格屬性']['人格特質'])}")
 
+async def run_all():
+    # 並行coroutine
+    # 生成一個persona 要花費1500token
+    # 約n個persona 花費 30+3n秒
+    await asyncio.gather(*(main() for _ in range(5)))
+
 if __name__ == "__main__":
-    for _ in range(0,10):
-        main()
+    start = time.time()
+    asyncio.run(run_all())
+    end = time.time()
+    print(f"\n✅ 全部任務完成，共花費 {end - start:.2f} 秒")
