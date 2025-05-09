@@ -7,8 +7,9 @@ class Question:
     id: int
     content: str
 
-class DataLoader:
+class QaLoader:
     """
+    感覺可以改名叫做question loader 因為還會有persona loader
     usage:    
     loader = DataLoader()
     questions = loader.get_all_questions()
@@ -148,7 +149,7 @@ class DataLoader:
 
 # 使用範例
 if __name__ == "__main__":
-    loader = DataLoader()
+    loader = QaLoader()
     '''
     # 添加單一問題
     new_question = loader.add_question("這是一個新的測試問題")

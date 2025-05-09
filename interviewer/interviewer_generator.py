@@ -1,11 +1,13 @@
 import faiss
 from typing import List, Dict
-from module.LLM_responder import LLM_responder
-from module.DATA_loader import DataLoader
-from module.PERSONA_loader import PersonaLoader
 import numpy as np
 import os
 import json
+
+from module.LLM_responder import LLM_responder
+from module.QA_loader import QaLoader
+from module.PERSONA_loader import PersonaLoader
+
 
 class Interviewer(LLM_responder):
     def __init__(self):
@@ -114,7 +116,7 @@ class Interviewer(LLM_responder):
             
         return embeddings, index, docs, qa_pairs
 
-    def process_questions_in_batches(self, loader: DataLoader, persona_loader: PersonaLoader = None, persona_id: str = None) -> List[Dict[str, str]]:
+    def process_questions_in_batches(self, loader: QaLoader, persona_loader: PersonaLoader = None, persona_id: str = None) -> List[Dict[str, str]]:
         """
         批次處理問題
         
@@ -315,7 +317,7 @@ class Interviewer(LLM_responder):
 # ========== Main Example Flow ==========
 if __name__ == "__main__":
     interviewer = Interviewer()
-    loader = DataLoader()
+    loader = QaLoader()
     persona_loader = PersonaLoader()
     
     # 獲取所有角色列表
@@ -339,7 +341,7 @@ if __name__ == "__main__":
         if persona_id in existing_dbs:
             print(f"\n跳過角色 {persona_id}（資料庫已存在）")
             continue
-            
+        print(persona)
         print(f"\n處理角色：{persona['基本資料']['姓名']} (ID: {persona_id})")
         print(f"總共有 {loader.get_question_count()} 個問題")
         print(f"將以每 {interviewer.batch_size} 個問題為一批次進行")
@@ -347,7 +349,11 @@ if __name__ == "__main__":
         # 批次處理問題
         qa_pairs = interviewer.process_questions_in_batches(loader, persona_loader, persona_id)
         docs = interviewer.format_qa_pairs(qa_pairs)
-        
+
+        # 進行動態訪談
+        #print("\n=== 開始動態訪談 ===")
+        #qa_pairs = interviewer.process_dynamic_interview(persona_id, persona, num_rounds=10)
+
         print("\n=== 建立記憶庫 ===")
         embeddings = interviewer.generate_embedding(docs)
         index = interviewer.build_vector_index(embeddings)
