@@ -78,7 +78,7 @@ class LLM_responder:
         return res.choices[0].message.content
     
     def full_chat_gpt_41_mini(self, sys_prompt: str="", usr_prompt: str="", temperature: int=0.9)->str:
-        """gpt4.1mini
+        """gpt4.1mini 
         使用 chat.completions API透過gpt-4.1-mini的自定義回答"單輪"對話
 
         usage: full_chat_gpt_41_mini("總結剛剛的描述內容", "太陽是什麼? 太陽是一個恆星", 0.3)"""
@@ -92,7 +92,7 @@ class LLM_responder:
         return res.choices[0].message.content
     
     def full_chat_gpt_41_nano(self, sys_prompt: str="", usr_prompt: str="", temperature: int=0.9)->str:
-        """gpt4.1nano
+        """gpt4.1nano 比較快比較不需要智商的
         使用 chat.completions API透過gpt-4.1-nano的自定義回答"單輪"對話
 
         usage: full_chat_gpt_41_nano("eval剛剛的內容", "太陽是什麼? 太陽是一個恆星", 0.3)"""

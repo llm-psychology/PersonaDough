@@ -17,6 +17,7 @@ class Interviewer(LLM_responder):
         self.batch_size = 10  # 每批次的問題數量
 
     # ========== 1. Collect user answers ==========
+    # 只有在humanoid_database是空的時候才會用到
     def collect_user_answers(self, question_list: List[str]) -> List[Dict[str, str]]:
         qa_pairs = []
         for q in question_list:
@@ -65,24 +66,17 @@ class Interviewer(LLM_responder):
         
         Args:
             name (str): 資料庫名稱
-            embeddings (np.ndarray): 文件嵌入向量
+            embeddings (np.ndarray): 文件嵌入向量（用於建立 index）
             index (faiss.IndexFlatL2): FAISS 索引
-            docs (List[str]): 格式化後的文件
+            docs (List[str]): 格式化後的文件（用於建立 embeddings）
             qa_pairs (List[Dict[str, str]]): 原始問答對
         """
         db_dir = os.path.join(self.rag_data_dir, name)
         os.makedirs(db_dir, exist_ok=True)
         
-        # 儲存 embeddings
-        np.save(os.path.join(db_dir, "embeddings.npy"), embeddings)
-        
-        # 儲存 FAISS index
+        # 儲存 FAISS index（包含所有向量資訊）
         faiss.write_index(index, os.path.join(db_dir, "index.faiss"))
         
-        # 儲存文件
-        with open(os.path.join(db_dir, "docs.json"), "w", encoding="utf-8") as f:
-            json.dump(docs, f, ensure_ascii=False, indent=2)
-            
         # 儲存原始問答對
         with open(os.path.join(db_dir, "qa_pairs.json"), "w", encoding="utf-8") as f:
             json.dump(qa_pairs, f, ensure_ascii=False, indent=2)
@@ -96,25 +90,21 @@ class Interviewer(LLM_responder):
             name (str): 資料庫名稱
             
         Returns:
-            tuple: (embeddings, index, docs, qa_pairs)
+            tuple: (index, docs, qa_pairs)
         """
         db_dir = os.path.join(self.rag_data_dir, name)
         
-        # 載入 embeddings
-        embeddings = np.load(os.path.join(db_dir, "embeddings.npy"))
-        
-        # 載入 FAISS index
+        # 載入 FAISS index（包含所有向量資訊）
         index = faiss.read_index(os.path.join(db_dir, "index.faiss"))
         
-        # 載入文件
-        with open(os.path.join(db_dir, "docs.json"), "r", encoding="utf-8") as f:
-            docs = json.load(f)
-            
         # 載入原始問答對
         with open(os.path.join(db_dir, "qa_pairs.json"), "r", encoding="utf-8") as f:
             qa_pairs = json.load(f)
             
-        return embeddings, index, docs, qa_pairs
+        # 動態生成 docs
+        docs = self.format_qa_pairs(qa_pairs)
+            
+        return index, docs, qa_pairs
 
     def process_questions_in_batches(self, loader: QaLoader, persona_loader: PersonaLoader = None, persona_id: str = None) -> List[Dict[str, str]]:
         """
@@ -219,15 +209,13 @@ class Interviewer(LLM_responder):
                         })
             else:
                 # 如果沒有角色資料，則收集使用者回答
+                print("沒有角色資料，將收集你的回答")
                 batch_qa_pairs = self.collect_user_answers(batch_question_contents)
             
             all_qa_pairs.extend(batch_qa_pairs)
             print(f"完成批次 {i//self.batch_size + 1}")
             
         return all_qa_pairs
-
-    def start_prompt():
-        pass
 
     def process_dynamic_interview(self, persona_id: str, persona_data: dict, num_rounds: int = 10) -> List[Dict[str, str]]:
         """
@@ -289,18 +277,19 @@ class Interviewer(LLM_responder):
                 current_context += f"Q：{current_question}\nA：{current_answer}\n\n"
                 
                 # 使用 MINI_MODEL 產生下一個問題
-                follow_up_prompt = f"""根據以下訪談內容，產生一個深入的問題。問題應該要：
+                sys_prompt = f"""根據以下訪談內容，產生一個深入的問題。問題應該要：
                 1. 基於受訪者的回答
                 2. 引導出更多個人故事或想法
                 3. 保持對話的連貫性
-                4. 避免重複已問過的問題
+                4. 避免重複已問過的問題"""
 
+                ask_prompt = f"""
                 訪談內容：
                 {current_context}
 
                 請只輸出問題，不要有任何其他文字。"""
                 
-                next_question = self.full_chat_gpt_41_mini("你是一個專業的訪談者，善於提出深入的問題", follow_up_prompt, 0.7)
+                next_question = self.full_chat_gpt_41_mini("你是一個專業的訪談者，善於提出深入的問題", ask_prompt, 0.7)
                 next_question = next_question.strip()
                 
                 # 如果不是最後一回合，加入新問題
@@ -341,19 +330,20 @@ if __name__ == "__main__":
         if persona_id in existing_dbs:
             print(f"\n跳過角色 {persona_id}（資料庫已存在）")
             continue
+            
         print(persona)
         print(f"\n處理角色：{persona['姓名']} (ID: {persona_id})")
         print(f"總共有 {loader.get_question_count()} 個問題")
         print(f"將以每 {interviewer.batch_size} 個問題為一批次進行")
         
         # 批次處理問題
-        qa_pairs = interviewer.process_questions_in_batches(loader, persona_loader, persona_id)
+        qa_pairs = interviewer.process_questions_in_batches(loader, persona_loader, persona_id) # 一個batch大概4000token，一個persona會做4個batch
         docs = interviewer.format_qa_pairs(qa_pairs)
-
+        
         # 進行動態訪談
-        #print("\n=== 開始動態訪談 ===")
-        #qa_pairs = interviewer.process_dynamic_interview(persona_id, persona, num_rounds=10)
-
+        print("\n=== 開始動態訪談 ===")
+        qa_pairs += interviewer.process_dynamic_interview(persona_id, persona, num_rounds=10)
+        
         print("\n=== 建立記憶庫 ===")
         embeddings = interviewer.generate_embedding(docs)
         index = interviewer.build_vector_index(embeddings)

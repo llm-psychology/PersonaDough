@@ -43,7 +43,7 @@ def chat_with_persona(persona_id: str):
     
     try:
         # 載入角色的 RAG 資料庫
-        embeddings, index, docs, qa_pairs = interviewer.load_rag_database(persona_id)
+        index, docs, qa_pairs = interviewer.load_rag_database(persona_id)
         print(f"\n成功載入角色資料庫：{persona_id}")
         
         # 開始問答循環
@@ -60,7 +60,7 @@ def chat_with_persona(persona_id: str):
             for i, (doc, dist) in enumerate(zip(retrieved, distances)):
                 print(f"\n{i+1}. 距離：{dist:.4f}")
                 print(f"內容：{doc}")
-                if dist > 0.7:  # 如果距離太遠，加入提示
+                if dist > 0.5:  # 如果距離太遠，加入提示
                     print("(注意：此資料相似度較低)")
                     retrieved = None
                 else:
