@@ -10,6 +10,8 @@ load_dotenv()
 EMBEDDING_MODEL = "text-embedding-ada-002"
 CHAT_MODEL_4O = "gpt-4o"
 CHAT_MODEL_41 = "gpt-4.1"
+MINI_MODEL = "gpt-4.1-mini"
+NANO_MODEL = "gpt-4.1-nano"
 
 class LLM_responder:
     """LLM api 物件"""  
@@ -67,6 +69,34 @@ class LLM_responder:
 
         usage: full_chat_gpt_41("你現在是數學教學小助手，不可以誤人子弟亂回答，要教給五歲小孩聽的", "回答一個題目是: 1+1=多少?", 0.3)"""
         model = CHAT_MODEL_41
+        prompt=[
+            {"role": "system", "content": sys_prompt},
+            {"role": "user", "content": usr_prompt},
+        ]
+        top_p = 1
+        res = self._call_chat_openai_api(model, prompt, temperature, top_p)
+        return res.choices[0].message.content
+    
+    def full_chat_gpt_41_mini(self, sys_prompt: str="", usr_prompt: str="", temperature: int=0.9)->str:
+        """gpt4.1mini
+        使用 chat.completions API透過gpt-4.1-mini的自定義回答"單輪"對話
+
+        usage: full_chat_gpt_41_mini("總結剛剛的描述內容", "太陽是什麼? 太陽是一個恆星", 0.3)"""
+        model = MINI_MODEL
+        prompt=[
+            {"role": "system", "content": sys_prompt},
+            {"role": "user", "content": usr_prompt},
+        ]
+        top_p = 1
+        res = self._call_chat_openai_api(model, prompt, temperature, top_p)
+        return res.choices[0].message.content
+    
+    def full_chat_gpt_41_nano(self, sys_prompt: str="", usr_prompt: str="", temperature: int=0.9)->str:
+        """gpt4.1nano
+        使用 chat.completions API透過gpt-4.1-nano的自定義回答"單輪"對話
+
+        usage: full_chat_gpt_41_nano("eval剛剛的內容", "太陽是什麼? 太陽是一個恆星", 0.3)"""
+        model = NANO_MODEL
         prompt=[
             {"role": "system", "content": sys_prompt},
             {"role": "user", "content": usr_prompt},

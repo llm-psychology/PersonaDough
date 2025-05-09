@@ -226,41 +226,123 @@ class Interviewer(LLM_responder):
 
     def start_prompt():
         pass
+
+    def process_dynamic_interview(self, persona_id: str, persona_data: dict, num_rounds: int = 10) -> List[Dict[str, str]]:
+        """
+        進行動態訪談，根據回答產生後續問題
+        
+        Args:
+            persona_id (str): 角色ID
+            persona_data (dict): 角色資料
+            num_rounds (int): 訪談回合數
+            
+        Returns:
+            List[Dict[str, str]]: 問答對列表
+        """
+        qa_pairs = []
+        current_context = ""
+        
+        # 初始問題
+        initial_question = "請描述您童年最難忘的回憶。"
+        qa_pairs.append({"q": initial_question, "a": ""})
+        
+        for round_num in range(num_rounds):
+            print(f"\n=== 訪談回合 {round_num + 1}/{num_rounds} ===")
+            
+            # 取得當前問題
+            current_question = qa_pairs[-1]["q"]
+            print(f"\n問題：{current_question}")
+            
+            # 使用角色回答問題
+            question_batch_prompt = f"""請回答以下訪談問題，並嚴格遵守輸出格式。
+
+            【輸入】：
+            {current_question}
+
+            ---
+
+            【輸出】：(不包含此行)
+            [
+            {{
+            "問題": "{current_question}",
+            "回答": "你的回答"
+            }}
+            ]
+
+            ---
+            """
+            
+            sys_prompt = f"你現在是\n {json.dumps(persona_data, ensure_ascii=False)}"
+            answer = self.full_chat_gpt_41(sys_prompt, question_batch_prompt, 0.7)
+            
+            try:
+                # 解析回答
+                answer = answer.strip().replace("【","").replace("【輸出】","").replace("】","").replace("[輸出]","").replace("輸出：", "")
+                qa_list = json.loads(answer)
+                current_answer = qa_list[0]["回答"]
+                qa_pairs[-1]["a"] = current_answer
+                print(f"回答：{current_answer}")
+                
+                # 更新上下文
+                current_context += f"Q：{current_question}\nA：{current_answer}\n\n"
+                
+                # 使用 MINI_MODEL 產生下一個問題
+                follow_up_prompt = f"""根據以下訪談內容，產生一個深入的問題。問題應該要：
+                1. 基於受訪者的回答
+                2. 引導出更多個人故事或想法
+                3. 保持對話的連貫性
+                4. 避免重複已問過的問題
+
+                訪談內容：
+                {current_context}
+
+                請只輸出問題，不要有任何其他文字。"""
+                
+                next_question = self.full_chat_gpt_41_mini("你是一個專業的訪談者，善於提出深入的問題", follow_up_prompt, 0.7)
+                next_question = next_question.strip()
+                
+                # 如果不是最後一回合，加入新問題
+                if round_num < num_rounds - 1:
+                    qa_pairs.append({"q": next_question, "a": ""})
+                
+            except json.JSONDecodeError as e:
+                print(f"解析回答時發生錯誤：{str(e)}")
+                print("<原始回答>", answer)
+                break
+                
+        return qa_pairs
+
 # ========== Main Example Flow ==========
 if __name__ == "__main__":
     interviewer = Interviewer()
     loader = DataLoader()
     persona_loader = PersonaLoader()
     
-    # 檢查是否要載入現有資料庫
-    load_existing = input("是否要載入現有資料庫？(y/n): ").lower() == 'y'
-    #load_existing = False
+    # 獲取所有角色列表
+    persona_list = persona_loader.get_persona_list()
+    rag_data_dir = "interviewer/rag_database"
+    os.makedirs(rag_data_dir, exist_ok=True)
     
-    if load_existing:
-        db_name = input("請輸入資料庫名稱：")
-        try:
-            embeddings, index, docs, qa_pairs = interviewer.load_rag_database(db_name)
-            print(f"\n成功載入資料庫：{db_name}")
-        except Exception as e:
-            print(f"載入資料庫失敗：{str(e)}")
-            exit(1)
-    else:
-        print("\n=== 開始問卷調查 ===")
+    # 獲取已存在的資料庫目錄
+    existing_dbs = set()
+    if os.path.exists(rag_data_dir):
+        existing_dbs = set(d for d in os.listdir(rag_data_dir) 
+                          if os.path.isdir(os.path.join(rag_data_dir, d)))
+    
+    print("\n=== 開始處理角色資料庫 ===")
+    print(f"總共有 {len(persona_list)} 個角色")
+    
+    for persona in persona_list:
+        persona_id = persona['id']
+        
+        # 如果資料庫已存在，跳過
+        if persona_id in existing_dbs:
+            print(f"\n跳過角色 {persona_id}（資料庫已存在）")
+            continue
+            
+        print(f"\n處理角色：{persona['基本資料']['姓名']} (ID: {persona_id})")
         print(f"總共有 {loader.get_question_count()} 個問題")
         print(f"將以每 {interviewer.batch_size} 個問題為一批次進行")
-        
-        # 選擇是否使用角色自動回答
-        use_persona = input("是否要使用角色自動回答問題？(y/n): ").lower() == 'y'
-        persona_id = None
-        
-        if use_persona:
-            # 顯示所有可用角色
-            persona_list = persona_loader.get_persona_list()
-            print("\n可用的角色：")
-            for persona in persona_list:
-                print(f"ID: {persona['id']}, 姓名: {persona['姓名']}, 性別: {persona['性別']}, 年紀: {persona['年紀']}")
-            
-            persona_id = input("\n請輸入要使用的角色ID：")
         
         # 批次處理問題
         qa_pairs = interviewer.process_questions_in_batches(loader, persona_loader, persona_id)
@@ -270,28 +352,10 @@ if __name__ == "__main__":
         embeddings = interviewer.generate_embedding(docs)
         index = interviewer.build_vector_index(embeddings)
         
-        # 儲存新建立的資料庫
-        db_name = input("\n請為這個資料庫命名：")
-        interviewer.save_rag_database(db_name, embeddings, index, docs, qa_pairs)
-        print(f"資料庫已儲存為：{db_name}")
+        # 自動使用 persona_id 作為資料庫名稱
+        interviewer.save_rag_database(persona_id, embeddings, index, docs, qa_pairs)
+        print(f"資料庫已自動儲存為：{persona_id}")
+    
+    print("\n=== 所有角色處理完成 ===")
 
-    # 開始問答循環
-    while True:
-        query = input("\n請輸入你的提問（或輸入 'exit' 離開）：\n> ")
-        if query.strip().lower() == "exit":
-            break
-        retrieved, distances = interviewer.retrieve_similar_docs(query, index, docs)
-        print("\n=== 相似度分析 ===")
-        print(f"查詢問題：{query}")
-        print("\n最相似的資料：")
-        for i, (doc, dist) in enumerate(zip(retrieved, distances)):
-            print(f"\n{i+1}. 距離：{dist:.4f}")
-            print(f"內容：{doc}")
-            if dist > 0.7:  # 如果距離太遠，加入提示
-                print("(注意：此資料相似度較低)")
-                retrieved = None
-            else:
-                print("(相似度高)")
-        prompt = interviewer.build_simulation_prompt(retrieved, query)
-        answer = interviewer.simulate_persona_answer(prompt)
-        print(f"\n模擬人格回答：\n{answer}\n")
+
