@@ -342,7 +342,7 @@ if __name__ == "__main__":
             print(f"\n跳過角色 {persona_id}（資料庫已存在）")
             continue
         print(persona)
-        print(f"\n處理角色：{persona['基本資料']['姓名']} (ID: {persona_id})")
+        print(f"\n處理角色：{persona['姓名']} (ID: {persona_id})")
         print(f"總共有 {loader.get_question_count()} 個問題")
         print(f"將以每 {interviewer.batch_size} 個問題為一批次進行")
         
