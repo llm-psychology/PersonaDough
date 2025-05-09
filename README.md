@@ -19,6 +19,7 @@ Character background settings. Inspired by character.ai
     R_agent[面試官代理] --> context[標準化訪談]
     context[標準化訪談] --> vdb[FAISS Index]
     vdb(FAISS Index) --> L_agent[類人代理]
+    vdb(FAISS Index) --> dy_context[動態訪談] --> L_agent[類人代理]
 ```
 ## 首次使用
 
