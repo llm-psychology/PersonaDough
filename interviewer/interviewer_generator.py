@@ -37,11 +37,12 @@ class Interviewer(LLM_responder):
         return index
 
     # ========== 5. Retrieve Similar Docs ==========
-    def retrieve_similar_docs(self, query: str, index: faiss.IndexFlatL2, docs: List[str], top_k: int = 3, similarity_threshold: float = 0.7) -> List[str]:
+    def retrieve_similar_docs(self, query: str, index: faiss.IndexFlatL2, docs: List[str], top_k: int = 3, similarity_threshold: float = 0.7) -> tuple:
         res = self._call_embeddings_openai_api([query])
         query_vector = np.array([res.data[0].embedding])
         D, I = index.search(query_vector, top_k)
-        return [docs[i] for i, d in zip(I[0], D[0]) if d < (1 - similarity_threshold)]
+        similar_docs = [docs[i] for i in I[0]]  # 移除距離過濾
+        return similar_docs, D[0]  # 返回相似文檔和距離
 
     # ========== 6. Build Simulation Prompt ==========
     def build_simulation_prompt(self, retrieved_docs: List[str], user_query: str) -> List[Dict[str, str]]:
@@ -145,18 +146,75 @@ class Interviewer(LLM_responder):
             
             # 取得當前批次的問題內容
             batch_question_contents = [q.content for q in batch_questions]
+            batch_qa_pairs = []  # 初始化批次問答對列表
             
             # 如果有角色資料，使用角色自動回答
             if persona_data:
-                batch_qa_pairs = []
+                question_batch_prompt = """請回答每一題訪談問題，並嚴格遵守輸出格式。
+
+                【輸入】：
+                1. 請描述您童年最難忘的回憶。
+                2. 您認為哪些個人特質對您的成長影響最大？
+                3. 請談談您在學生時代最具挑戰的一件事。
+
+                ---
+
+【輸出】：(不包含此行)
+[
+{
+"問題": "請描述您童年最難忘的回憶。",
+"回答": "在我童年的記憶中，最難忘的莫過於在雲林鄉間田野裡的日子。父母經營著一片竹筍田，每到收成季節，我就會跟著父親一起下田。雖然一身泥濘，卻感受到一家人為生活齊心努力的溫暖。我還記得黃昏時分，母親會在田邊等著我們回家，那份簡單卻踏實的幸福至今仍令我懷念。這些經歷讓我體會到勤勞與家庭的重要，而純樸的鄉村環境，也塑造了我知足常樂的心態。"
+},
+{
+"問題": "您認為哪些個人特質對您的成長影響最大？",
+"回答": "我認為善於調適和進取精神對我的成長影響很大。從小家境並不優渥，生活中常常需要面對各種大大小小的困難。但我總是抱持著積極的態度快速適應不同情境，並勇於挑戰自己的極限。此外，由於性格偏內向，我學會了觀察與傾聽，也因此能在小團體裡發揮影響力。這種穩健而進取的特質，成為我日後無論在學業、職場還是家庭生活中最大的助力。"
+},
+{
+"問題": "您認為哪些個人特質對您的成長影響最大？",
+"回答": "在雲林高中的時候，我參加了模擬聯合國會議。對一個內向的學生而言，要在眾人面前表達想法與辯論非常不容易。但這卻讓我開始正視並突破自己的侷限。當時我花了很多時間準備，也花心思理解各國立場與利益，最終順利完成多場談判與協議。這段經驗不僅磨練了我的談判技巧，也讓我更有自信面對各種未知的挑戰，進而點燃了我對國際事務的熱情。"
+}
+]
+
+                ---
+
+                訪問題目是:
+                """
+                
+                # 將當前批次的問題加入 prompt
                 for question in batch_question_contents:
-                    # 使用 full_chat_gpt_4o 讓角色回答問題
-                    # 這裡的 prompt 可以根據需求自定義
-                    sys_prompt = f"你現在是 {persona_data['基本資料']['姓名']}，請根據你的背景和性格回答問題。"
-                    answer = self.full_chat_gpt_4o(sys_prompt, question)
-                    batch_qa_pairs.append({"q": question, "a": answer})
-                    print(f"\n問題：{question}")
-                    print(f"回答：{answer}")
+                    question_batch_prompt += question + "\n"
+                
+                print("正在生成回答...")
+                sys_prompt = f"你現在是\n {json.dumps(persona_data, ensure_ascii=False)}"
+                
+                answer = self.full_chat_gpt_41(sys_prompt, question_batch_prompt, 0.7)
+
+                try:
+                    # 解析 JSON 回答
+                    # 移除可能的開頭和結尾空白
+                    answer = answer.strip().replace("【","").replace("【輸出】","").replace("】","").replace("[輸出]","").replace("輸出：", "")
+                    
+                    # 解析 JSON
+                    qa_list = json.loads(answer)
+                    
+                    # 將解析後的問答對加入批次結果
+                    for qa in qa_list:
+                        batch_qa_pairs.append({
+                            "q": qa["問題"],
+                            "a": qa["回答"]
+                        })
+                        print(f"\n問題：{qa['問題']}")
+                        print(f"回答：{qa['回答']}")
+                        
+                except json.JSONDecodeError as e:
+                    print(f"解析回答時發生錯誤：{str(e)}")
+                    print("<原始回答>", answer)
+                    # 如果解析失敗，使用原始方式處理
+                    for question in batch_question_contents:
+                        batch_qa_pairs.append({
+                            "q": question,
+                            "a": "解析回答失敗"
+                        })
             else:
                 # 如果沒有角色資料，則收集使用者回答
                 batch_qa_pairs = self.collect_user_answers(batch_question_contents)
@@ -175,8 +233,8 @@ if __name__ == "__main__":
     persona_loader = PersonaLoader()
     
     # 檢查是否要載入現有資料庫
-    #load_existing = input("是否要載入現有資料庫？(y/n): ").lower() == 'y'
-    load_existing = False
+    load_existing = input("是否要載入現有資料庫？(y/n): ").lower() == 'y'
+    #load_existing = False
     
     if load_existing:
         db_name = input("請輸入資料庫名稱：")
@@ -222,7 +280,18 @@ if __name__ == "__main__":
         query = input("\n請輸入你的提問（或輸入 'exit' 離開）：\n> ")
         if query.strip().lower() == "exit":
             break
-        retrieved = interviewer.retrieve_similar_docs(query, index, docs)
+        retrieved, distances = interviewer.retrieve_similar_docs(query, index, docs)
+        print("\n=== 相似度分析 ===")
+        print(f"查詢問題：{query}")
+        print("\n最相似的資料：")
+        for i, (doc, dist) in enumerate(zip(retrieved, distances)):
+            print(f"\n{i+1}. 距離：{dist:.4f}")
+            print(f"內容：{doc}")
+            if dist > 0.7:  # 如果距離太遠，加入提示
+                print("(注意：此資料相似度較低)")
+                retrieved = None
+            else:
+                print("(相似度高)")
         prompt = interviewer.build_simulation_prompt(retrieved, query)
         answer = interviewer.simulate_persona_answer(prompt)
         print(f"\n模擬人格回答：\n{answer}\n")

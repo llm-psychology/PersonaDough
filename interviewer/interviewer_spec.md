@@ -30,11 +30,11 @@
   每個元素是 `{q: 問題, a: 使用者回答}` 的字典。
 
 ### 實作細節
-- 可以是 CLI 問答、表單、或網站表單。
+- 使用 CLI 介面進行問答。
 - 確保使用者回答不能是空字串。
 
 ```python
-def collect_user_answers(question_list: List[str]) -> List[Dict[str, str]]:
+def collect_user_answers(self, question_list: List[str]) -> List[Dict[str, str]]:
     ...
 ```
 
@@ -56,29 +56,29 @@ def collect_user_answers(question_list: List[str]) -> List[Dict[str, str]]:
 - 保持固定格式方便後續 retrival 和模仿。
 
 ```python
-def format_qa_pairs(qa_pairs: List[Dict[str, str]]) -> List[str]:
+def format_qa_pairs(self, qa_pairs: List[Dict[str, str]]) -> List[str]:
     ...
 ```
 
 ---
 
-## 3. Embedding 建立 (generate_embeddings)
+## 3. Embedding 建立 (generate_embedding)
 
 ### 功能  
 對所有記憶片段做 embedding。
 
 ### Input  
 - `docs: List[str]`
-- `embedding_model: str` （例如 `"text-embedding-ada-002"`）
 
 ### Output  
 - `embeddings: np.ndarray` (shape: (n_docs, embedding_dim))
 
 ### 實作細節
-- 可以用 OpenAI Embedding API，或其他本地模型。
+- 使用 OpenAI Embedding API。
+- 繼承自 LLM_responder 類別。
 
 ```python
-def generate_embeddings(docs: List[str], embedding_model: str) -> np.ndarray:
+def generate_embedding(self, docs: List[str]) -> np.ndarray:
     ...
 ```
 
@@ -97,10 +97,9 @@ def generate_embeddings(docs: List[str], embedding_model: str) -> np.ndarray:
 
 ### 實作細節
 - 使用 `IndexFlatL2` 做基本L2距離搜尋。
-- 同時儲存 docs (記憶片段) 外部 list，方便檢索對應。
 
 ```python
-def build_vector_index(embeddings: np.ndarray) -> faiss.IndexFlatL2:
+def build_vector_index(self, embeddings: np.ndarray) -> faiss.IndexFlatL2:
     ...
 ```
 
@@ -115,18 +114,20 @@ def build_vector_index(embeddings: np.ndarray) -> faiss.IndexFlatL2:
 - `query: str`
 - `index: faiss.IndexFlatL2`
 - `docs: List[str]`
-- `embedding_model: str`
 - `top_k: int = 3`
 - `similarity_threshold: float = 0.7`
 
 ### Output  
-- `retrieved_docs: List[str]`
+- `tuple: (similar_docs: List[str], distances: np.ndarray)`
+  - similar_docs: 相似的文件列表
+  - distances: 對應的距離值
 
 ### 實作細節
-- 如果相似度小於設定的門檻（例如0.7），直接回傳空列表，避免人格走樣。
+- 返回所有 top_k 個結果，不管距離多遠。
+- 距離值範圍在 0 到 2 之間，0 表示完全相同，2 表示完全相反。
 
 ```python
-def retrieve_similar_docs(query: str, index: faiss.IndexFlatL2, docs: List[str], embedding_model: str, top_k: int = 3, similarity_threshold: float = 0.7) -> List[str]:
+def retrieve_similar_docs(self, query: str, index: faiss.IndexFlatL2, docs: List[str], top_k: int = 3, similarity_threshold: float = 0.7) -> tuple:
     ...
 ```
 
@@ -142,15 +143,14 @@ def retrieve_similar_docs(query: str, index: faiss.IndexFlatL2, docs: List[str],
 - `user_query: str`
 
 ### Output  
-- `system_prompt: str`
 - `chat_messages: List[Dict[str, str]]`  
   （符合 OpenAI Chat API 格式）
 
 ### 實作細節
-- 如果 `retrieved_docs` 為空，可以在 prompt 特別說明「無記憶片段可用，請謹慎推測」。
+- 如果 `retrieved_docs` 為空，在 prompt 中說明「無可參考的記憶資料」。
 
 ```python
-def build_simulation_prompt(retrieved_docs: List[str], user_query: str) -> List[Dict[str, str]]:
+def build_simulation_prompt(self, retrieved_docs: List[str], user_query: str) -> List[Dict[str, str]]:
     ...
 ```
 
@@ -163,21 +163,61 @@ def build_simulation_prompt(retrieved_docs: List[str], user_query: str) -> List[
 
 ### Input  
 - `chat_messages: List[Dict[str, str]]`
-- `model: str` （例如 `"gpt-3.5-turbo"`）
 
 ### Output  
 - `response_text: str`
 
 ### 實作細節
-- 可設定 temperature 控制回答隨機程度。
+- 繼承自 LLM_responder 類別。
+- 使用 GPT-4 模型。
 
 ```python
-def simulate_persona_answer(chat_messages: List[Dict[str, str]], model: str) -> str:
+def simulate_persona_answer(self, chat_messages: List[Dict[str, str]]) -> str:
     ...
 ```
+
+---
+
+## 8. RAG 資料庫管理
+
+### 功能  
+儲存和載入 RAG 資料庫。
+
+### 方法
+1. `save_rag_database(self, name: str, embeddings: np.ndarray, index: faiss.IndexFlatL2, docs: List[str], qa_pairs: List[Dict[str, str]])`
+   - 儲存 embeddings、FAISS index、文件和問答對
+
+2. `load_rag_database(self, name: str) -> tuple`
+   - 載入並返回 embeddings、index、docs 和 qa_pairs
+
+### 實作細節
+- 資料庫儲存在 `interviewer/rag_database` 目錄下
+- 每個資料庫有自己的子目錄
+- 支援多個資料庫的管理
+
+---
+
+## 9. 批次處理功能
+
+### 功能  
+批次處理問卷問題。
+
+### 方法
+`process_questions_in_batches(self, loader: DataLoader, persona_loader: PersonaLoader = None, persona_id: str = None) -> List[Dict[str, str]]`
+
+### 實作細節
+- 支援使用 PersonaLoader 自動回答問題
+- 預設每批次處理 10 個問題
+- 支援 JSON 格式的問答輸出
+- 提供相似度分析和距離顯示
 
 # 注意事項補充
 
 - **問卷問題設計得越多樣，模仿效果越好。**
 - **Embedding模型、檢索向量DB和LLM需要相互搭配調整。**
-- **強烈建議加上`similarity threshold`，否則人格容易亂掉。**
+- **相似度距離值說明：**
+  - 0 表示完全相同
+  - 2 表示完全相反
+  - 一般來說，距離小於 0.5 的資料被認為是比較相似的
+- **支援角色自動回答功能，可以讓指定角色自動回答問卷問題。**
+- **提供完整的 RAG 資料庫管理功能，方便保存和載入不同的人格資料。**

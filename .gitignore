@@ -4,7 +4,7 @@
 論文spec.md
 .vscode/
 not_upload/
-
+interviewer/rag_database/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
