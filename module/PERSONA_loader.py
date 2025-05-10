@@ -5,6 +5,7 @@ import shutil
 from datetime import datetime
 import aiofiles
 import asyncio
+import time
 
 class PersonaLoader:
     """角色資料載入器"""
@@ -13,6 +14,7 @@ class PersonaLoader:
         self.backup_dir = "humanoid/humanoid_database/backup"
         self.personas = {}  # 儲存所有載入的角色資料
         # 為避免race condition
+        
         self._load_task = asyncio.create_task(self._load_all_personas())
     
     async def wait_until_ready(self):
@@ -55,7 +57,7 @@ class PersonaLoader:
         """獲取角色總數"""
         return len(self.personas)
 
-    def get_persona_list(self) -> List[Dict]:
+    def get_persona_basic_list(self) -> List[Dict]:
         """獲取所有角色的基本資料列表"""
         return [
             {
@@ -66,7 +68,7 @@ class PersonaLoader:
             }
             for persona in self.personas.values()
         ]
-
+    
     async def add_persona(self, persona_data: Dict) -> bool:
         """
         添加新角色
@@ -256,3 +258,17 @@ class PersonaLoader:
         """重新載入所有角色資料"""
         self.personas.clear()
         await self._load_all_personas()
+
+# =================================================================
+
+async def unit_test():
+    x = PersonaLoader()
+    await x.wait_until_ready() #important: or it will return null
+    y = x.get_all_personas()
+    print(y['278c94ca40']) # test
+
+if __name__ == "__main__":
+    start = time.time()
+    asyncio.run(unit_test())
+    end = time.time()
+    print(f"\n✅ 全部任務完成，共花費 {end - start:.2f} 秒")
