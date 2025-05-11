@@ -1,8 +1,10 @@
 import os
+import asyncio
 from interviewer_generator import Interviewer
 from module.PERSONA_loader import PersonaLoader
+import time
 
-def list_available_personas():
+async def list_available_personas():
     """列出所有可用的角色資料庫"""
     rag_data_dir = "interviewer/rag_database"
     if not os.path.exists(rag_data_dir):
@@ -19,6 +21,7 @@ def list_available_personas():
     
     # 載入角色資料以顯示更多資訊
     persona_loader = PersonaLoader()
+    await persona_loader.wait_until_ready()
     available_personas = []
     
     print("\n可用的角色資料庫：")
@@ -37,13 +40,13 @@ def list_available_personas():
     
     return available_personas
 
-def chat_with_persona(persona_id: str):
+async def chat_with_persona(persona_id: str):
     """與指定角色進行對話"""
     interviewer = Interviewer()
     
     try:
         # 載入角色的 RAG 資料庫
-        index, docs, qa_pairs = interviewer.load_rag_database(persona_id)
+        index, docs, qa_pairs = await interviewer.load_rag_database(persona_id)
         print(f"\n成功載入角色資料庫：{persona_id}")
         
         # 開始問答循環
@@ -52,7 +55,7 @@ def chat_with_persona(persona_id: str):
             if query.strip().lower() == "exit":
                 break
                 
-            retrieved, distances = interviewer.retrieve_similar_docs(query, index, docs)
+            retrieved, distances = await interviewer.retrieve_similar_docs(query, index, docs)
             print("\n=== 相似度分析 ===")
             print(f"查詢問題：{query}")
             print("\n最相似的資料：")
@@ -67,18 +70,18 @@ def chat_with_persona(persona_id: str):
                     print("(相似度高)")
                     
             prompt = interviewer.build_simulation_prompt(retrieved, query)
-            answer = interviewer.simulate_persona_answer(prompt)
+            answer = await interviewer.simulate_persona_answer(prompt)
             print(f"\n模擬人格回答：\n{answer}\n")
             
     except Exception as e:
         print(f"發生錯誤：{str(e)}")
 
-def main():
+async def main():
     """主程式"""
     print("=== 角色對話系統 ===")
     
     # 列出所有可用的角色
-    available_personas = list_available_personas()
+    available_personas = await list_available_personas()
     
     if not available_personas:
         return
@@ -90,9 +93,12 @@ def main():
             break
             
         if persona_id in available_personas:
-            chat_with_persona(persona_id)
+            await chat_with_persona(persona_id)
         else:
             print(f"找不到ID為 {persona_id} 的角色資料庫")
 
 if __name__ == "__main__":
-    main() 
+    start = time.time()
+    asyncio.run(main())
+    end = time.time()
+    print(f"\n✅ 全部任務完成，共花費 {end - start:.2f} 秒")
