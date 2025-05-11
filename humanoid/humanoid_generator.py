@@ -6,10 +6,9 @@ import uuid
 import asyncio
 import aiofiles
 import time
+
 # ========================================================================================
-
-
-    
+NUM_GENERATE = 1
 # ========================================================================================
 
 class BaseInfoGenerator:
@@ -129,6 +128,76 @@ class ToneGenerator(LLM_responder):
     
 # ========================================================================================
 
+class SummarizedBehaviorGenerator(LLM_responder):
+    """簡化行為生成器 - 使用 GPT-4.1-mini 進行故事和語言行為的濃縮"""
+    
+    async def generate(self, character_data):
+        """使用 GPT-4.1-mini 生成簡化的行為描述"""
+        
+        life_story = character_data.get("生平故事", "")
+        language_behavior = character_data.get("語言行為", "")
+        
+        sys_prompt = "你是一位專業的人物特徵摘要專家。請將提供的人物生平和語言行為進行精簡濃縮，保留關鍵特徵和核心行為模式。"
+        usr_prompt = f"""
+        請將以下人物的生平故事和語言行為濃縮為一段簡潔的描述，字數控制在200字以內：
+        
+        【生平故事】：
+        {life_story}
+        
+        【語言行為】：
+        {language_behavior}
+        
+        請將核心的生平經歷和說話特點濃縮為一段簡短文字，使讀者能快速理解該人物的本質。
+        """
+        
+        response = await self.full_chat_gpt_41_mini(sys_prompt, usr_prompt, 0.7)
+        return response
+
+# ========================================================================================
+
+class AIParameterAnalyzer(LLM_responder):
+    """AI參數分析器 - 使用 GPT-4.1-nano 分析生平故事，判斷適合的 top_p 和 temperature 值"""
+    
+    async def analyze(self, life_story):
+        """分析生平故事並建議 AI 參數"""
+        
+        sys_prompt = "你是一位專業的 AI 參數優化專家。請分析提供的人物生平故事，並根據內容的複雜性、創造性和一致性需求，建議最適合的 top_p 和 temperature 參數值。"
+        usr_prompt = f"""
+        請分析以下人物生平故事，並根據內容特點提供建議的 AI 參數：
+        
+        【生平故事】：
+        {life_story}
+        temperature// 從 0.1 到 0.9 的值，如果人格特質內有複雜/創意內容推薦較高值，精確/事實內容推薦較低值
+        top_p// 從 0.1 到 1.0 的值，根據內容的多樣性需求決定
+
+        請只回覆以下格式的 JSON 內容：
+        {{
+          "temperature": 0.X, 
+          "top_p": 0.X, 
+          "reason": "簡短的推薦理由（50字以內）"
+        }}
+        """
+        
+        response = await self.full_chat_gpt_41_nano(sys_prompt, usr_prompt, 0.5)
+        
+        # 嘗試解析 JSON 回應
+        try:
+            # 在回應中尋找 JSON 格式的內容
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response)
+            if json_match:
+                json_str = json_match.group(0)
+                params = json.loads(json_str)
+                return params
+            else:
+                # 如果無法找到 JSON，提供默認值
+                return {"temperature": 0.7, "top_p": 0.9, "reason": "默認值（無法從回應中解析 JSON）"}
+        except Exception as e:
+            # 解析失敗時提供默認值
+            return {"temperature": 0.7, "top_p": 0.9, "reason": f"解析錯誤：{str(e)}"}
+
+# ========================================================================================
+
 class CharacterGenerator:
     """人格生成主流程控制"""
     def __init__(self):
@@ -136,7 +205,9 @@ class CharacterGenerator:
         self.attribute_injector = AttributeInjector()
         self.story_generator = StoryGenerator()
         self.tone_generator = ToneGenerator()
-    
+        self.summarized_behavior_generator = SummarizedBehaviorGenerator()
+        self.parameter_analyzer = AIParameterAnalyzer()
+
     async def generate_character(self):
         """生成完整角色資料"""
         # 步驟 1: 生成基本資料
@@ -154,6 +225,15 @@ class CharacterGenerator:
         tone = await self.tone_generator.generate(character_data)
         tone = tone.replace("\n","")
         character_data["語言行為"] = tone
+
+        # 步驟 5: 使用 GPT-4.1-mini 濃縮生平故事和語言行為
+        summarized_behavior = await self.summarized_behavior_generator.generate(character_data)
+        summarized_behavior = summarized_behavior.replace("\n","")
+        character_data["簡化行為"] = summarized_behavior
+        
+        # 步驟 6: 使用 GPT-4.1-nano 分析生平故事，判斷適合的 AI 參數
+        ai_params = await self.parameter_analyzer.analyze(story)
+        character_data["AI參數"] = ai_params
 
         return character_data
     
@@ -195,7 +275,7 @@ async def run_all():
     # 並行coroutine
     # 生成一個persona 要花費1500token
     # 約n個persona 花費 30+3n秒
-    await asyncio.gather(*(main() for _ in range(5)))
+    await asyncio.gather(*(main() for _ in range(NUM_GENERATE)))
 
 if __name__ == "__main__":
     start = time.time()

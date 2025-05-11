@@ -1,3 +1,5 @@
+# interviewer_generator.py
+
 import faiss
 from typing import List, Dict
 import numpy as np
@@ -181,6 +183,7 @@ class Interviewer(LLM_responder):
                     question_batch_prompt += question + "\n"
                 
                 print("正在生成回答...")
+
                 sys_prompt = f"你現在是\n {json.dumps(persona_data, ensure_ascii=False)}"
                 
                 answer = await self.full_chat_gpt_41(sys_prompt, question_batch_prompt, 0.7)
@@ -221,7 +224,7 @@ class Interviewer(LLM_responder):
             
         return all_qa_pairs
 
-    async def process_dynamic_interview(self, persona_id: str, persona_data: dict, num_rounds: int = 10) -> List[Dict[str, str]]:
+    async def process_dynamic_interview(self, persona_id: str, persona_data: dict, static_interview_data:str, num_rounds: int = 10) -> List[Dict[str, str]]:
         """
         進行動態訪談，根據回答產生後續問題
         
@@ -233,20 +236,26 @@ class Interviewer(LLM_responder):
         Returns:
             List[Dict[str, str]]: 問答對列表
         """
+        # ==============================
         qa_pairs = []
         current_context = ""
-        
+        # ==============================
+        sys_prompt = "你是一個專業的訪談者，根據以下訪談內容，產生一個深入的問題。問題應該要： 1. 基於受訪者的回答 2. 引導出更多個人故事或想法 3. 保持對話的連貫性 4. 避免重複已問過的問題"
+        question_batch_prompt = "這是剛剛受訪者與訪談者的QA:\n" + static_interview_data
+        # ==============================
         # 初始問題
-        initial_question = "請描述您童年最難忘的回憶。"
+        initial_question = await self.full_chat_gpt_41_mini(sys_prompt, question_batch_prompt, 0.7) # 5000 tokens
         qa_pairs.append({"q": initial_question, "a": ""})
-        
+        # ==============================
         for round_num in range(num_rounds):
-            print(f"\n=== 訪談回合 {round_num + 1}/{num_rounds} ===")
+            print(f"\n=== {persona_id}的訪談回合 {round_num + 1}/{num_rounds} ===")
             
             # 取得當前問題
             current_question = qa_pairs[-1]["q"]
             print(f"\n問題：{current_question}")
-            
+
+            sys_prompt = f"你現在是\n {json.dumps(persona_data, ensure_ascii=False)}"
+
             # 使用角色回答問題
             question_batch_prompt = f"""請回答以下訪談問題，並嚴格遵守輸出格式。
 
@@ -266,7 +275,7 @@ class Interviewer(LLM_responder):
             ---
             """
             
-            sys_prompt = f"你現在是\n {json.dumps(persona_data, ensure_ascii=False)}"
+            
             answer = await self.full_chat_gpt_41(sys_prompt, question_batch_prompt, 0.7)
             
             try:
@@ -308,38 +317,42 @@ class Interviewer(LLM_responder):
         return qa_pairs
 
 # ========== Main Example Flow ==========
-async def process_persona(persona, interviewer, qaloader, persona_loader, rag_data_dir, existing_dbs):
-    persona_id = persona['id']
+async def process_persona(persona, interviewer:Interviewer, qaloader:QaLoader, persona_loader:PersonaLoader, rag_data_dir, existing_dbs):
+    # bug: persona只有基本資料
+    # persona 是一整個一個人的json
+    persona_id = persona['基本資料']['id']
     
     if persona_id in existing_dbs:
         print(f"\n跳過角色 {persona_id}（資料庫已存在）")
         return
     
-    print(f"\n處理角色：{persona['姓名']} (ID: {persona_id})")
+    print(f"\n處理角色：{persona['基本資料']['姓名']} (ID: {persona_id})")
     print(f"總共有 {qaloader.get_question_count()} 個問題")
     print(f"將以每 {interviewer.batch_size} 個問題為一批次進行")
 
     qa_pairs = await interviewer.process_questions_in_batches(qaloader, persona_loader, persona_id)
-    docs = interviewer.format_qa_pairs(qa_pairs)
+    
 
     print("\n=== 開始動態訪談 ===")
-    qa_pairs += await interviewer.process_dynamic_interview(persona_id, persona, num_rounds=10)
+    qa_pairs += await interviewer.process_dynamic_interview(persona_id, persona, str(qa_pairs), num_rounds=10)
 
     print("\n=== 建立記憶庫 ===")
+    docs = interviewer.format_qa_pairs(qa_pairs)
     embeddings = await interviewer.generate_embedding(docs)
     index = interviewer.build_vector_index(embeddings)
 
     await interviewer.save_rag_database(persona_id, embeddings, index, docs, qa_pairs)
     print(f"資料庫已自動儲存為：{persona_id}")
 
-async def main():
+async def unit_test():
+    # this unit test can generate all the interview result in humanoid database
     interviewer = Interviewer()
     qaloader = QaLoader()
-    await qaloader.wait_until_ready()
+    await qaloader.wait_until_ready() #important: or it will return null
     persona_loader = PersonaLoader()
-    await persona_loader.wait_until_ready()
+    await persona_loader.wait_until_ready() #important: or it will return null
 
-    persona_list = persona_loader.get_persona_list()
+    persona_list = persona_loader.get_all_personas() #抓取所有persona
     rag_data_dir = "interviewer/rag_database"
     os.makedirs(rag_data_dir, exist_ok=True)
     
@@ -359,13 +372,14 @@ async def main():
         async with sem:
             await process_persona(persona, interviewer, qaloader, persona_loader, rag_data_dir, existing_dbs)
 
-    await asyncio.gather(*(limited_process_persona(p) for p in persona_list))
+    await asyncio.gather(*(limited_process_persona(persona_list[p]) for p in persona_list)) #p是id list
     print("\n=== 所有角色處理完成 ===")
 
 if __name__ == "__main__":
-    # 五個persona共270秒
+    
+
     start = time.time()
-    asyncio.run(main())
+    asyncio.run(unit_test())# 五個persona花費270秒
     end = time.time()
     print(f"\n✅ 全部任務完成，共花費 {end - start:.2f} 秒")
 
