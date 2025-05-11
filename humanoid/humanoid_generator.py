@@ -9,7 +9,7 @@ import aiofiles
 import time
 
 # ========================================================================================
-NUM_GENERATE = 1
+NUM_GENERATE = 10
 # ========================================================================================
 
 class BaseInfoGenerator:
@@ -83,7 +83,7 @@ class StoryGenerator(LLM_responder):
         prompt = self._create_story_prompt(character_data)
         
         # 發送 API 請求
-        response = await self.chat_gpt_4o(prompt, 0.8)
+        response = await self.full_chat_gpt_4o(usr_prompt = prompt, temperature = 0.8)
         
         return response
     
@@ -273,9 +273,9 @@ async def main():
     print(f"人格特質: {', '.join(character['人格屬性']['人格特質'])}")
 
 async def run_all():
-    # 並行coroutine
-    # 生成一個persona 要花費1500token
-    # 約n個persona 花費 30+3n秒
+    # 並行 coroutine
+    # 生成一個 persona 要花費5000token
+    # 約10個 persona 花費 40秒
     await asyncio.gather(*(main() for _ in range(NUM_GENERATE)))
 
 if __name__ == "__main__":

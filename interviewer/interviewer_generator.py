@@ -46,8 +46,8 @@ class Interviewer(LLM_responder):
 
     # ========== 5. Retrieve Similar Docs ==========
     async def retrieve_similar_docs(self, query: str, index: faiss.IndexFlatL2, docs: List[str], top_k: int = 3, similarity_threshold: float = 0.7) -> tuple:
-        res = await self._call_embeddings_openai_api([query])
-        query_vector = np.array([res.data[0].embedding])
+        respond = await self.__call_embeddings_openai_api([query])
+        query_vector = np.array([respond.data[0].embedding])
         D, I = index.search(query_vector, top_k)
         similar_docs = [docs[i] for i in I[0]]  # 移除距離過濾
         return similar_docs, D[0]  # 返回相似文檔和距離
@@ -344,6 +344,8 @@ async def process_persona(persona, interviewer:Interviewer, qaloader:QaLoader, p
     await interviewer.save_rag_database(persona_id, embeddings, index, docs, qa_pairs)
     print(f"資料庫已自動儲存為：{persona_id}")
 
+# =========================================================
+
 async def unit_test():
     # this unit test can generate all the interview result in humanoid database
     interviewer = Interviewer()
@@ -376,8 +378,6 @@ async def unit_test():
     print("\n=== 所有角色處理完成 ===")
 
 if __name__ == "__main__":
-    
-
     start = time.time()
     asyncio.run(unit_test())# 五個persona花費270秒
     end = time.time()

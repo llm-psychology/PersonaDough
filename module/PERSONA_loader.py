@@ -9,7 +9,9 @@ import asyncio
 import time
 
 class PersonaLoader:
-    """角色資料載入器"""
+    """usage: personas = PersonaLoader()
+    
+    """
     def __init__(self):
         self.database_dir = "humanoid/humanoid_database"
         self.backup_dir = "humanoid/humanoid_database/backup"

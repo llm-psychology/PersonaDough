@@ -4,3 +4,4 @@ openai
 faiss-cpu
 faker
 aiofiles
+deprecated

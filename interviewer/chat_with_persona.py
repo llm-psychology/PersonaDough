@@ -77,6 +77,8 @@ async def chat_with_persona(persona_id: str):
     except Exception as e:
         print(f"發生錯誤：{str(e)}")
 
+# =========================================================
+
 async def main():
     """主程式"""
     print("=== 角色對話系統 ===")
