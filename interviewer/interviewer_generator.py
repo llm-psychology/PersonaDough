@@ -1,3 +1,5 @@
+# interviewer_generator.py
+
 import faiss
 from typing import List, Dict
 import numpy as np
@@ -342,7 +344,8 @@ async def process_persona(persona, interviewer:Interviewer, qaloader:QaLoader, p
     await interviewer.save_rag_database(persona_id, embeddings, index, docs, qa_pairs)
     print(f"資料庫已自動儲存為：{persona_id}")
 
-async def main():
+async def unit_test():
+    # this unit test can generate all the interview result in humanoid database
     interviewer = Interviewer()
     qaloader = QaLoader()
     await qaloader.wait_until_ready() #important: or it will return null
@@ -373,10 +376,10 @@ async def main():
     print("\n=== 所有角色處理完成 ===")
 
 if __name__ == "__main__":
-    # 五個persona共270秒
+    
 
     start = time.time()
-    asyncio.run(main())
+    asyncio.run(unit_test())# 五個persona花費270秒
     end = time.time()
     print(f"\n✅ 全部任務完成，共花費 {end - start:.2f} 秒")
 
