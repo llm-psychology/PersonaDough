@@ -120,7 +120,7 @@ class ToneGenerator(LLM_responder):
     async def generate(self, full_character_data):
         """使用 LLM 生成語調說話方式 gpt-4o gpt-4.1都可以"""
         
-        prefix = "你是一位語言與人格建模專家。根據以下人物的基本資料，請推論出這個人日常說話時的語氣特徵、常見詞彙風格、語調節奏，並描述其語言風格：\n基本資料："
+        prefix = "你是一位語言與人格建模專家。根據以下人物的基本資料，你要推論出這個人日常說話時的語氣特徵、常見詞彙風格、語調節奏，並描述其語言風格：\n基本資料："
         usr = "用一段小短文，不要列點的，用1000字以內，具體描述這個人說話的語氣、節奏、常用語、說話方式等，可以提出範例句子。避免太抽象。"
         # 發送 API 請求
         response = await self.full_chat_gpt_4o(prefix + json.dumps(full_character_data, ensure_ascii=False), usr, 0.7)
@@ -140,7 +140,7 @@ class SummarizedBehaviorGenerator(LLM_responder):
         
         sys_prompt = "你是一位專業的人物特徵摘要專家。請將提供的人物生平和語言行為進行精簡濃縮，保留關鍵特徵和核心行為模式。"
         usr_prompt = f"""
-        請將以下人物的生平故事和語言行為濃縮為一段簡潔的描述，字數控制在200字以內：
+        將以下人物的生平故事和語言行為濃縮為一段簡潔的描述，字數控制在200字以內：
         
         【生平故事】：
         {life_story}
@@ -148,7 +148,7 @@ class SummarizedBehaviorGenerator(LLM_responder):
         【語言行為】：
         {language_behavior}
         
-        請將核心的生平經歷和說話特點濃縮為一段簡短文字，使讀者能快速理解該人物的本質。
+        將核心的生平經歷和說話特點濃縮為一段簡短文字，使讀者能快速理解該人物的本質。
         """
         
         response = await self.full_chat_gpt_41_mini(sys_prompt, usr_prompt, 0.7)
@@ -164,14 +164,14 @@ class AIParameterAnalyzer(LLM_responder):
         
         sys_prompt = "你是一位專業的 AI 參數優化專家。請分析提供的人物生平故事，並根據內容的複雜性、創造性和一致性需求，建議最適合的 top_p 和 temperature 參數值。"
         usr_prompt = f"""
-        請分析以下人物生平故事，並根據內容特點提供建議的 AI 參數：
+        分析以下人物生平故事，並根據內容特點提供建議的 AI 參數：
         
         【生平故事】：
         {life_story}
         temperature// 從 0.1 到 0.9 的值，如果人格特質內有複雜/創意內容推薦較高值，精確/事實內容推薦較低值
         top_p// 從 0.1 到 1.0 的值，根據內容的多樣性需求決定
 
-        請只回覆以下格式的 JSON 內容：
+        只回覆以下格式的 JSON 內容：
         {{
           "temperature": 0.X, 
           "top_p": 0.X, 

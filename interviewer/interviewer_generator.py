@@ -147,19 +147,19 @@ class Interviewer(LLM_responder):
             
             # 如果有角色資料，使用角色自動回答
             if persona_data:
-                question_batch_prompt = """請回答每一題訪談問題，並嚴格遵守輸出格式。
+                question_batch_prompt = """回答每一題訪談問題，並嚴格遵守輸出格式。
 
                 【輸入】：
-                1. 請描述您童年最難忘的回憶。
+                1. 描述您童年最難忘的回憶。
                 2. 您認為哪些個人特質對您的成長影響最大？
-                3. 請談談您在學生時代最具挑戰的一件事。
+                3. 談談您在學生時代最具挑戰的一件事。
 
                 ---
 
 【輸出】：(不包含此行)
 [
 {
-"問題": "請描述您童年最難忘的回憶。",
+"問題": "描述您童年最難忘的回憶。",
 "回答": "在我童年的記憶中，最難忘的莫過於在雲林鄉間田野裡的日子。父母經營著一片竹筍田，每到收成季節，我就會跟著父親一起下田。雖然一身泥濘，卻感受到一家人為生活齊心努力的溫暖。我還記得黃昏時分，母親會在田邊等著我們回家，那份簡單卻踏實的幸福至今仍令我懷念。這些經歷讓我體會到勤勞與家庭的重要，而純樸的鄉村環境，也塑造了我知足常樂的心態。"
 },
 {
@@ -256,7 +256,7 @@ class Interviewer(LLM_responder):
             sys_prompt = f"你現在是\n {json.dumps(persona_data, ensure_ascii=False)}"
 
             # 使用角色回答問題
-            question_batch_prompt = f"""請回答以下訪談問題，並嚴格遵守輸出格式。
+            question_batch_prompt = f"""回答以下訪談問題，並嚴格遵守輸出格式。
 
             【輸入】：
             {current_question}
@@ -299,7 +299,7 @@ class Interviewer(LLM_responder):
                 訪談內容：
                 {current_context}
 
-                請只輸出一個問題，不要有任何其他文字，也不要過度重複敘述題幹。"""
+                只輸出一個問題，不要有任何其他文字，也不要過度重複敘述題幹。"""
                 
                 next_question = await self.full_chat_gpt_41_mini(sys_prompt, ask_prompt, 0.9)
                 next_question = next_question.strip()
