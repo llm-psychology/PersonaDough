@@ -142,7 +142,8 @@ class LLM_responder:
         top_p = 1
         respond = await self.__call_completions_openai_api(model, prompt, temperature, top_p)
         return respond.choices[0].message.content
-    #================================================================================================================
+
+    #=================================================================================
 
     async def _persona_to_prompt_reification(self, persona_base_info: str)->str:
         # 產生一張0.04usd
@@ -185,7 +186,13 @@ class LLM_responder:
         """使用 embeddings.create 得到 embeddings"""
         respond = await self.__call_embeddings_openai_api(docs, embedding_model)
         return np.array([d.embedding for d in respond.data])
-    
+
+    async def get_embedding_for_text(self, text: str) -> np.ndarray:
+        """產生單一文字的embedding"""
+        embeddings = await self.__call_embeddings_openai_api([text])
+        return embeddings
+
+    #=================================================================================
 
 async def unit_test():
     # 23秒

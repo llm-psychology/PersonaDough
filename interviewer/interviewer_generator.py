@@ -46,16 +46,16 @@ class Interviewer(LLM_responder):
 
     # ========== 5. Retrieve Similar Docs ==========
     async def retrieve_similar_docs(self, query: str, index: faiss.IndexFlatL2, docs: List[str], top_k: int = 3, similarity_threshold: float = 0.7) -> tuple:
-        respond = await self.__call_embeddings_openai_api([query])
+        respond = await self.get_embedding_for_text(query)
         query_vector = np.array([respond.data[0].embedding])
         D, I = index.search(query_vector, top_k)
         similar_docs = [docs[i] for i in I[0]]  # 移除距離過濾
         return similar_docs, D[0]  # 返回相似文檔和距離
 
     # ========== 6. Build Simulation Prompt ==========
-    def build_simulation_prompt(self, retrieved_docs: List[str], user_query: str) -> List[Dict[str, str]]:
+    def build_simulation_prompt(self, persona, retrieved_docs: List[str], user_query: str) -> List[Dict[str, str]]:
         memory_context = "\n".join(retrieved_docs) if retrieved_docs else "（無可參考的記憶資料）"
-        system_prompt = f"你是一個根據以下記憶資料模擬出來的人格：\n{memory_context}\n請根據這些資料，用一致的口吻與邏輯回答問題。"
+        system_prompt = f"你是一個根據以下記憶資料模擬出來的人格：{persona['簡化行為']}\n{memory_context}\n根據這些資料，用一致的口吻與邏輯回答問題。"
         return [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_query}

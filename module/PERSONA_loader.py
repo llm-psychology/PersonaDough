@@ -10,6 +10,7 @@ import time
 
 class PersonaLoader:
     """usage:   personas = PersonaLoader()
+    
                 await personas.wait_until_ready() #important: or it will return null
     """
     def __init__(self):

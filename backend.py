@@ -29,6 +29,9 @@ from module.PERSONA_loader import (
 from module.QA_loader import (
     QaLoader
 )
+from interviewer.chat_with_persona import ( 
+    ChatWith
+)
 from interviewer.interviewer_generator import (
     Interviewer
 )
@@ -118,33 +121,30 @@ async def create_item(item: Item):
 
 @app.post("/interviews", response_model=InterviewResponse)
 async def create_interview(request: InterviewRequest):
-    interviewer = Interviewer()
-    rag_data_dir = os.path.join("interviewer/rag_database", "rag_data")
+    chatbot = ChatWith()
+    await chatbot.wait_until_ready()
+
     try:
-        if request.persona_id and request.static_interview_data:
-            persona_loader = PersonaLoader(rag_data_dir)
-            persona_data = persona_loader.get_persona_by_id(request.persona_id)
-            if not persona_data:
-                logger.warning(f"Persona {request.persona_id} not found.")
-                raise HTTPException(status_code=404, detail="Persona not found")
-            qa_pairs = await interviewer.process_dynamic_interview(
-                request.persona_id, persona_data, request.static_interview_data, request.num_rounds
-            )
-        elif request.persona_id:
-            persona_loader = PersonaLoader(rag_data_dir)
-            persona_data = persona_loader.get_persona_by_id(request.persona_id)
-            if not persona_data:
-                logger.warning(f"Persona {request.persona_id} not found.")
-                raise HTTPException(status_code=404, detail="Persona not found")
-            qa_pairs = await interviewer.process_dynamic_interview(
-                request.persona_id, persona_data, "", request.num_rounds
-            )
-        else:
-            logger.warning("No persona_id provided for interview request.")
+        if not request.persona_id:
             raise HTTPException(status_code=400, detail="Persona ID is required")
-        logger.info(f"Interview created for persona: {request.persona_id}")
+
+        # 製作一個預設問題（或從 request 拿，用 request.static_interview_data 當問題也可以）
+        question = request.static_interview_data or "請問你的家庭背景？"
+
+        # 載入資料庫
+        index, docs, qa_pairs = await chatbot.interviewer_obj.load_rag_database(request.persona_id)
+        retrieved, distances = await chatbot.interviewer_obj.retrieve_similar_docs(question, index, docs)
+
+        # 檢查取回結果
+        if distances and all(dist > 0.5 for dist in distances):
+            retrieved = None  # 相似度低也可視情況調整
+        prompt = chatbot.interviewer_obj.build_simulation_prompt(
+            chatbot.persona_loader_obj.personas[request.persona_id], 
+            retrieved, question
+        )
+        answer = await chatbot.interviewer_obj.simulate_persona_answer(prompt)
+        qa_pairs = [{"question": question, "answer": answer}]
         return InterviewResponse(qa_pairs=qa_pairs)
-    
     except Exception as e:
         logger.error(f"Interview API failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
