@@ -5,6 +5,8 @@
 .vscode/
 not_upload/
 interviewer/rag_database/
+humanoid/humanoid_database/disuse
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

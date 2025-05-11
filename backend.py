@@ -1,3 +1,4 @@
+import logging
 from pydantic import BaseModel
 import aiofiles
 from fastapi import FastAPI, Query, HTTPException, Path
@@ -8,6 +9,14 @@ import os
 from typing import List, Optional, Dict
 import uvicorn
 import glob
+
+# Logging initialization
+logging.basicConfig(
+    level=logging.INFO,  # You can change to DEBUG or WARNING as needed
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+logger = logging.getLogger(__name__)
 
 from module.QA_loader import QaLoader
 from module.PERSONA_loader import PersonaLoader
@@ -110,12 +119,13 @@ async def create_item(item: Item):
 @app.post("/interviews", response_model=InterviewResponse)
 async def create_interview(request: InterviewRequest):
     interviewer = Interviewer()
-    rag_data_dir = os.path.join("persona-dough", "rag_data")  # 調整路徑以符合你的專案結構
+    rag_data_dir = os.path.join("interviewer/rag_database", "rag_data")
     try:
         if request.persona_id and request.static_interview_data:
             persona_loader = PersonaLoader(rag_data_dir)
             persona_data = persona_loader.get_persona_by_id(request.persona_id)
             if not persona_data:
+                logger.warning(f"Persona {request.persona_id} not found.")
                 raise HTTPException(status_code=404, detail="Persona not found")
             qa_pairs = await interviewer.process_dynamic_interview(
                 request.persona_id, persona_data, request.static_interview_data, request.num_rounds
@@ -124,17 +134,19 @@ async def create_interview(request: InterviewRequest):
             persona_loader = PersonaLoader(rag_data_dir)
             persona_data = persona_loader.get_persona_by_id(request.persona_id)
             if not persona_data:
+                logger.warning(f"Persona {request.persona_id} not found.")
                 raise HTTPException(status_code=404, detail="Persona not found")
             qa_pairs = await interviewer.process_dynamic_interview(
                 request.persona_id, persona_data, "", request.num_rounds
             )
         else:
-            # 假設沒有提供 persona_id，則執行其他邏輯 (例如隨機訪談)
+            logger.warning("No persona_id provided for interview request.")
             raise HTTPException(status_code=400, detail="Persona ID is required")
-
+        logger.info(f"Interview created for persona: {request.persona_id}")
         return InterviewResponse(qa_pairs=qa_pairs)
     
     except Exception as e:
+        logger.error(f"Interview API failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/generate", response_class=JSONResponse)
@@ -155,10 +167,11 @@ async def generate_humanoid(count: int = Query(1, gt=0, le=10, description="Numb
                 "name": character["基本資料"]["姓名"],
                 "file_path": file_path
             })
-        
+        logger.info(f"Generated {len(results)} humanoids.")
         return {"success": True, "count": len(results), "humanoids": results}
     
     except Exception as e:
+        logger.error(f"Error generating humanoid: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error generating humanoid: {str(e)}")
 
 @app.get("/humanoids", response_class=JSONResponse)
@@ -191,12 +204,13 @@ async def list_humanoids():
                         "file_path": file_path
                     })
             except Exception as e:
-                print(f"Error reading file {file_path}: {e}")
+                logger.warning(f"Error reading file {file_path}: {e}")
                 continue
-                
+        logger.info(f"Listed {len(humanoids)} humanoids.")
         return {"success": True, "count": len(humanoids), "humanoids": humanoids}
     
     except Exception as e:
+        logger.error(f"Error listing humanoids: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error listing humanoids: {str(e)}")
 
 @app.get("/humanoids/{humanoid_id}", response_class=JSONResponse)
@@ -237,6 +251,7 @@ async def get_humanoid(humanoid_id: str = Path(..., description="ID of the human
         # Find the file with the specified ID
         files = glob.glob(os.path.join(DATABASE_PATH, f"{humanoid_id}_*.json"))
         if not files:
+            logger.warning(f"Humanoid with ID {humanoid_id} not found")
             raise HTTPException(status_code=404, detail=f"Humanoid with ID {humanoid_id} not found")
         
         file_path = files[0]
@@ -246,10 +261,12 @@ async def get_humanoid(humanoid_id: str = Path(..., description="ID of the human
         async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
             content = await f.read()
             data = json.loads(content) 
+        logger.info(f"Fetched humanoid {humanoid_id}")
         return {"success": True, "humanoid": data}
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"Error getting humanoid: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error getting humanoid: {str(e)}")
 
 @app.post("/search", response_class=JSONResponse)
@@ -305,9 +322,9 @@ async def search_humanoids(filter_params: HumanoidFilter):
                             "data": data
                         })
             except Exception as e:
-                print(f"Error processing file {file_path}: {e}")
+                logger.warning(f"Error processing file {file_path}: {e}")
                 continue
-        
+        logger.info(f"Search result count: {len(matching_humanoids)}")
         return {
             "success": True, 
             "count": len(matching_humanoids), 
@@ -315,6 +332,7 @@ async def search_humanoids(filter_params: HumanoidFilter):
         }
     
     except Exception as e:
+        logger.error(f"Error searching humanoids: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error searching humanoids: {str(e)}")
 
 # Start the server
