@@ -9,6 +9,7 @@ from deprecated import deprecated
 import asyncio
 import time
 import requests
+from module.PHOTO_compress import download_and_convert_to_jpg_async
 load_dotenv()
 
 # ======= CONFIG =======
@@ -49,7 +50,9 @@ class LLM_responder:
             raise Exception(f"API 請求失敗: {str(e)}")
 
     async def __call_images_openai_api(self, model, prompt: str, output_path: str, photo_size: str) -> None:
-        """reification過的prompt轉圖片並下載"""
+        """reification過的prompt轉圖片並下載
+        https://platform.openai.com/docs/api-reference/images/create
+        """
         response = await self.client.images.generate(
             prompt=prompt,
             n=1,
@@ -61,13 +64,10 @@ class LLM_responder:
         image_url = response.data[0].url
         if not image_url:
             raise Exception("圖片 URL 為空，無法下載圖片")
-
-        # 同步方式下載圖片
-        image_data = requests.get(image_url).content
-        with open(output_path, "wb") as f:
-            f.write(image_data)
-
-        print(f"圖片已下載至 {output_path}")
+        try:
+            await download_and_convert_to_jpg_async(image_url, output_path)
+        except Exception as e:
+            print(f"下載並轉換圖片時發生錯誤:{e}")
 
     async def __call_embeddings_openai_api(self, docs, model: str = EMBEDDING_MODEL):
         """使用 OpenAI 套件呼叫 embeddings.create API"""
@@ -145,6 +145,7 @@ class LLM_responder:
     #================================================================================================================
 
     async def _persona_to_prompt_reification(self, persona_base_info: str)->str:
+        # 產生一張0.04usd
         # style: 這邊放prompt嗎? 感覺不整齊
         sys_prompt="""
             根據以下人物資料，生成一段用於圖像 AI 模型（如 DALL·E）的英文 prompt，描述他的證件照風格大頭照，背景為白色，鏡頭直視，專業且清晰，強調是亞洲人。請根據年齡、性別、個性特質、語言風格、出生地等資訊，推理出這個人可能的外貌特徵（如微笑與否、眼神神情、髮型風格、服裝偏好、氣質感），並用英文精簡描述。
@@ -193,9 +194,17 @@ async def unit_test():
     await test_persona.wait_until_ready()
     test_llm = LLM_responder()
     test_personas = test_persona.get_all_personas()
-    await test_llm.photo_generate(test_personas['d328f6c4ab'])
+
+    sem = asyncio.Semaphore(5) #5個一組
+
+    async def limited_process(persona):
+        async with sem:
+            await test_llm.photo_generate(persona)
+
+    await asyncio.gather(*(limited_process(test_personas[p]) for p in test_personas)) #p是id list
 
 if __name__ == "__main__":
+    # 生成10個persona的照片一共花費
     start = time.time()
     asyncio.run(unit_test())
     end = time.time()
