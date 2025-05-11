@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>Persona Dough - Humanoid & Interview Simulator</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <!-- Bootstrap 5 + Dark Theme -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #181f2e; min-height: 100vh; color: #dee4ef;}
+    .navbar { background: #232846; }
+    h1,h2,h3,h4 { font-family: 'Segoe UI',sans-serif; font-weight:600;}
+    .humanoid-card { background: #242e50; border-radius: 14px; color: #fff; }
+    .humanoid-card:hover { box-shadow:0 0 18px #5ab4ef66; transition: .26s; cursor:pointer;}
+    .qa-block { background: #2c385a; border-radius:10px; margin-bottom:12px; padding:10px 16px; }
+    .ai-badge { background: #60e1e6; color:#161b29; border-radius: 6px; font-weight: bold; font-size: 1em; padding: 1px 9px;}
+    .spinner-border { width: 2rem; height: 2rem;}
+    .btn-glow { box-shadow:0 0 18px #59d8ff66; }
+    .card-selected { border:2.5px solid #65eaff;}
+    .list-inline button { background:none; border:none; color:#85b8fa;}
+    .list-inline button.active, .list-inline button:focus {color:#fff; font-weight:bold;}
+  </style>
+</head>
+<body>
+<nav class="navbar navbar-dark bg-dark mb-4">
+  <div class="container">
+    <span class="navbar-brand mb-0 h1"><i class="bi bi-person-bounding-box"></i> Persona Dough <small class="text-secondary">| AI Humanoid Agent Demo</small></span>
+  </div>
+</nav>
+<div class="container">
+  <h2 class="mb-4">角色清單</h2>
+  <div id="humanoid-list" class="row g-4"></div>
+  <hr class="my-4">
+  <div id="persona-detail" style="display:none;">
+    <h3>角色資料 <span class="badge ai-badge" id="persona-name"></span></h3>
+    <div class="mb-3" id="persona-brief"></div>
+    <button class="btn btn-info btn-glow" id="start-interview-btn">和這個角色對談</button>
+  </div>
+  <hr>
+  <div id="interview-section" style="display:none;">
+    <h3 class="mb-3">與 <span id="interview-persona-name"></span> 的對談記錄</h3>
+    <div id="qa-list"></div>
+    <div id="loading-spinner" class="text-center my-3" style="display:none;">
+      <div class="spinner-border" role="status"></div>
+      <span class="text-info ms-2">AI generating interview...</span>
+    </div>
+  </div>
+</div>
+<!-- Bootstrap & Icons -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<script>
+const apiBase = "http://127.0.0.1:20000"; // same host
+
+async function fetchHumanoids() {
+  const resp = await fetch(apiBase + "/humanoids");
+  const data = await resp.json();
+  return data.humanoids ?? [];
+}
+
+async function fetchHumanoidById(id) {
+  const resp = await fetch(apiBase + `/humanoids/${id}`);
+  const data = await resp.json();
+  return data.humanoid ?? {};
+}
+
+async function startInterview(personaId, numRounds = 6) {
+  document.getElementById('loading-spinner').style.display = '';
+  const resp = await fetch(apiBase + "/interviews", {
+    method: "POST",
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ persona_id: personaId, num_rounds: numRounds, static_interview_data: "" })
+  });
+  document.getElementById('loading-spinner').style.display = 'none';
+  if (!resp.ok) {
+    alert("AI 訪談產生失敗");
+    return [];
+  }
+  const data = await resp.json();
+  return data.qa_pairs ?? [];
+}
+
+function renderHumanoidList(humanoids) {
+  const list = document.getElementById('humanoid-list');
+  list.innerHTML="";
+  humanoids.forEach(h => {
+    const dom = document.createElement('div');
+    dom.className = "col-md-4";
+    dom.innerHTML = `
+      <div class="card humanoid-card mb-2" data-id="${h.id}">
+        <div class="card-body">
+          <h4 class="card-title">${h.name}</h4>
+          <p class="card-text text-secondary">人物ID: <code>${h.id}</code></p>
+        </div>
+      </div>
+    `;
+    dom.querySelector('.humanoid-card').onclick = () => selectPersona(h.id, h.name);
+    list.appendChild(dom);
+  });
+}
+
+async function selectPersona(id, name) {
+  document.querySelectorAll('.humanoid-card').forEach(el=>el.classList.remove('card-selected'));
+  document.querySelector(`.humanoid-card[data-id="${id}"]`).classList.add('card-selected');
+  document.getElementById("persona-detail").style.display="";
+  document.getElementById("persona-name").innerText = name;
+  const detail = await fetchHumanoidById(id);
+  let html = `<ul class="list-inline">`;
+  for(const [k,v] of Object.entries(detail["基本資料"]??{})) {
+    html += `<li class="list-inline-item mx-2"><span class="text-info">${k}</span>: <b>${v}</b></li>`;
+  }
+  html += `</ul>`;
+  html += `<div class="mt-2 text-muted">特質：${(detail["人格屬性"]?.["人格特質"]||[]).map(x=>`<span class="badge rounded-pill text-bg-secondary">${x}</span>`).join(' ')}</div>`;
+  html += `<div class="mt-1 text-muted">社交能力：${(detail["人格屬性"]?.["社交能力"]||[]).map(x=>`<span class="badge bg-primary">${x}</span>`).join(' ')}</div>`;
+  html += `<div class="mt-1 text-muted">能力屬性：${(detail["人格屬性"]?.["能力屬性"]||[]).map(x=>`<span class="badge bg-success">${x}</span>`).join(' ')}</div>`;
+  html += `<div class="mt-2">${detail["生平故事"]||""}</div>`;
+  document.getElementById("persona-brief").innerHTML = html;
+  document.getElementById("start-interview-btn").onclick = () => launchInterview(id, name);
+}
+
+async function launchInterview(personaId, personaName) {
+  document.getElementById("interview-section").style.display = "";
+  document.getElementById("interview-persona-name").innerText = personaName;
+  document.getElementById("qa-list").innerHTML = `<div class="qa-block text-center text-secondary">AI 訪談生成中，請稍候...</div>`;
+  const qaPairs = await startInterview(personaId);
+  renderQAList(qaPairs);
+}
+
+function renderQAList(qas) {
+  const qaList = document.getElementById("qa-list");
+  if (!qas.length) {
+    qaList.innerHTML = `<div class="qa-block text-center text-warning">未取得 Q&A 訪談...</div>`;
+    return;
+  }
+  qaList.innerHTML = "";
+  qas.forEach((item, i) => {
+    qaList.innerHTML += `
+      <div class="qa-block">
+        <div><span class="text-info">Q${i+1}：</span>${item.q}</div>
+        <div><span class="text-warning">A${i+1}：</span>${item.a}</div>
+      </div>
+    `;
+  });
+}
+
+window.onload = async () => {
+  document.getElementById("interview-section").style.display = "none";
+  document.getElementById("persona-detail").style.display = "none";
+  const humanoids = await fetchHumanoids();
+  renderHumanoidList(humanoids);
+}
+</script>
+</body>
+</html>
