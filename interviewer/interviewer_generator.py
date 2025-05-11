@@ -1,5 +1,4 @@
 # interviewer_generator.py
-
 import faiss
 from typing import List, Dict
 import numpy as np
@@ -45,7 +44,7 @@ class Interviewer(LLM_responder):
         return index
 
     # ========== 5. Retrieve Similar Docs ==========
-    async def retrieve_similar_docs(self, query: str, index: faiss.IndexFlatL2, docs: List[str], top_k: int = 3, similarity_threshold: float = 0.7) -> tuple:
+    async def retrieve_similar_docs(self, query: str, index: faiss.IndexFlatL2, docs: List[str], top_k: int = 2, similarity_threshold: float = 0.7) -> tuple:
         respond = await self.get_embedding_for_text(query)
         query_vector = np.array([respond.data[0].embedding])
         D, I = index.search(query_vector, top_k)

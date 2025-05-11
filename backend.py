@@ -1,3 +1,4 @@
+# backend.py
 import logging
 from pydantic import BaseModel
 import aiofiles
@@ -121,30 +122,54 @@ async def create_item(item: Item):
 
 @app.post("/interviews", response_model=InterviewResponse)
 async def create_interview(request: InterviewRequest):
-    chatbot = ChatWith()
-    await chatbot.wait_until_ready()
-
+    """
+    Handle interview requests including both automated interview generation and chat interactions.
+    
+    The endpoint serves two purposes:
+    1. Generate automated interviews with preset questions
+    2. Respond to user chat messages in real-time
+    """
     try:
         if not request.persona_id:
             raise HTTPException(status_code=400, detail="Persona ID is required")
-
-        # 製作一個預設問題（或從 request 拿，用 request.static_interview_data 當問題也可以）
-        question = request.static_interview_data or "請問你的家庭背景？"
-
-        # 載入資料庫
-        index, docs, qa_pairs = await chatbot.interviewer_obj.load_rag_database(request.persona_id)
-        retrieved, distances = await chatbot.interviewer_obj.retrieve_similar_docs(question, index, docs)
-
-        # 檢查取回結果
-        if distances and all(dist > 0.5 for dist in distances):
-            retrieved = None  # 相似度低也可視情況調整
+        
+        # Initialize chat handler
+        chatbot = ChatWith()
+        await chatbot.wait_until_ready()  # important
+        
+        # Get input from request - either use static data as direct question or generate a default
+        user_question = request.static_interview_data
+        logger.info(f"使用者輸入: {user_question}")
+        
+        # Load persona data from database
+        index, docs, qa_docs = await chatbot.interviewer_obj.load_rag_database(request.persona_id)
+        
+        # Retrieve similar documents for context
+        retrieved, distances = await chatbot.interviewer_obj.retrieve_similar_docs(user_question, index, docs)
+        
+        # If no similar documents with good confidence, set retrieved to None
+        if len(distances) > 0 and all(dist < 0.5 for dist in distances):  # dist越小，離原話越近
+            retrieved = None
+        
+        # Build prompt with persona data and context
         prompt = chatbot.interviewer_obj.build_simulation_prompt(
             chatbot.persona_loader_obj.personas[request.persona_id], 
-            retrieved, question
+            retrieved, user_question
         )
+        
+        # Generate AI response
         answer = await chatbot.interviewer_obj.simulate_persona_answer(prompt)
-        qa_pairs = [{"question": question, "answer": answer}]
+        logger.info(f"回覆輸出: {answer}")
+        # Format response
+        qa_pairs = [{"q": user_question, "a": answer}] #front-end的return data.qa_pairs[0].a去接
+        
+        # If multiple rounds are requested (for automated interview)
+        if request.num_rounds > 1 and not request.static_interview_data:
+            # TODO: Implement multi-round interview generation logic here
+            pass
+            
         return InterviewResponse(qa_pairs=qa_pairs)
+        
     except Exception as e:
         logger.error(f"Interview API failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
