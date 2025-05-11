@@ -138,13 +138,11 @@ async function sendChatMessage(message) {
     }
     
     const data = await resp.json();
-    return data.qa_pairs[0].a;
-  } 
-  catch (error) {
+    return data.qa_pairs[0]?.a;
+  } catch (error) {
     console.error("Chat error:", error);
     return "抱歉，發生錯誤，請再試一次。";
-  } 
-  finally {
+  } finally {
     document.getElementById('chat-loading-spinner').style.display = 'none';
   }
 }
@@ -199,8 +197,15 @@ function renderHumanoidList(humanoids) {
     dom.innerHTML = `
       <div class="card humanoid-card mb-2" data-id="${h.id}">
         <div class="card-body">
-          <h4 class="card-title">${h.name}</h4>
-          <p class="card-text text-secondary">人物ID: <code>${h.id}</code></p>
+          <div class="row">
+            <div class="col-4">
+              <img src="${apiBase}/image/${h.id}" class="img-fluid rounded-circle" alt="${h.name}" onerror="this.src='https://via.placeholder.com/80?text=無圖片'">
+            </div>
+            <div class="col-8">
+              <h4 class="card-title">${h.name}</h4>
+              <p class="card-text text-secondary">人物ID: <code>${h.id}</code></p>
+            </div>
+          </div>
         </div>
       </div>
     `;
@@ -236,8 +241,24 @@ function openChatModal(personaId, personaName) {
   document.getElementById('message-container').innerHTML = '';
   document.getElementById('chat-persona-name').innerText = personaName;
   
-  // Show modal
+  // Show modal with profile image
   const chatModal = new bootstrap.Modal(document.getElementById('chat-modal'));
+  
+  // Update modal header to include profile image
+  const modalHeader = document.querySelector('#chat-modal .modal-header');
+  if (!modalHeader.querySelector('.profile-img')) {
+    const profileImg = document.createElement('img');
+    profileImg.src = `${apiBase}/image/${personaId}`;
+    profileImg.className = 'profile-img rounded-circle me-2';
+    profileImg.style.width = '40px';
+    profileImg.style.height = '40px';
+    profileImg.onerror = function() { this.src = 'https://via.placeholder.com/40?text=無圖片'; };
+    const title = modalHeader.querySelector('.modal-title');
+    modalHeader.insertBefore(profileImg, title);
+  } else {
+    modalHeader.querySelector('.profile-img').src = `${apiBase}/image/${personaId}`;
+  }
+  
   chatModal.show();
   
   // Add welcome message

@@ -367,7 +367,7 @@ async def unit_test():
 
     # 建立最大一組三個 coroutine 任務
 
-    sem = asyncio.Semaphore(3)
+    sem = asyncio.Semaphore(2)
 
     async def limited_process_persona(persona):
         async with sem:

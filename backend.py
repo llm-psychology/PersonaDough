@@ -4,7 +4,7 @@ from pydantic import BaseModel
 import aiofiles
 from fastapi import FastAPI, Query, HTTPException, Path
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 import json
 import os
 from typing import List, Optional, Dict
@@ -51,6 +51,8 @@ from humanoid.humanoid_generator import (
 # Database path
 DATABASE_PATH = "humanoid/humanoid_database"
 os.makedirs(DATABASE_PATH, exist_ok=True)
+PHOTO_DIR = DATABASE_PATH + "/photo/"
+os.makedirs(PHOTO_DIR, exist_ok=True)
 character_generator = CharacterGenerator() # Initialize character generator
 
 # =======================================================
@@ -115,6 +117,13 @@ async def root():
             "/search - Search humanoid agents with filters"
         ]
     }
+    
+@app.get("/image/{id}")
+async def get_image_by_id(id: str):
+    image_path = os.path.join(PHOTO_DIR, f"{id}.png")
+    if os.path.exists(image_path):
+        return FileResponse(image_path, media_type="image/png")
+    raise HTTPException(status_code=404, detail="Image not found")
 
 @app.post("/items")
 async def create_item(item: Item):
