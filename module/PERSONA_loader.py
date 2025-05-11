@@ -9,8 +9,8 @@ import asyncio
 import time
 
 class PersonaLoader:
-    """usage: personas = PersonaLoader()
-    
+    """usage:   personas = PersonaLoader()
+                await personas.wait_until_ready() #important: or it will return null
     """
     def __init__(self):
         self.database_dir = "humanoid/humanoid_database"
