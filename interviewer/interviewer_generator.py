@@ -365,7 +365,7 @@ async def unit_test():
     print("\n=== 開始處理角色資料庫 ===")
     print(f"總共有 {len(persona_list)} 個角色")
 
-    # 建立最大一組三個 coroutine 任務
+    # 建立最大一組2個 coroutine 任務
 
     sem = asyncio.Semaphore(2)
 
@@ -378,7 +378,7 @@ async def unit_test():
 
 if __name__ == "__main__":
     start = time.time()
-    asyncio.run(unit_test())# 五個persona花費270秒
+    asyncio.run(unit_test())# 8個persona花費650秒
     end = time.time()
     print(f"\n✅ 全部任務完成，共花費 {end - start:.2f} 秒")
 

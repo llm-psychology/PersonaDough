@@ -43,7 +43,8 @@ from humanoid.humanoid_generator import (
     ToneGenerator, 
     SummarizedBehaviorGenerator, 
     AIParameterAnalyzer,
-    CharacterGenerator
+    CharacterGenerator,
+    generate_a_persona
 )
 
 # =======================================================
@@ -187,22 +188,8 @@ async def create_interview(request: InterviewRequest):
 async def generate_humanoid(count: int = Query(1, gt=0, le=10, description="Number of humanoids to generate")):
     """Generate one or more new humanoid agents"""
     try:
-        results = []
-        for _ in range(count):
-            # Generate a new character
-            character = await character_generator.generate_character()
-            
-            # Save the character
-            file_path = await character_generator.save_character(character)
-            
-            # Add to results
-            results.append({
-                "id": character["基本資料"]["id"],
-                "name": character["基本資料"]["姓名"],
-                "file_path": file_path
-            })
-        logger.info(f"Generated {len(results)} humanoids.")
-        return {"success": True, "count": len(results), "humanoids": results}
+        await generate_a_persona()
+        return {"success": True, "count": 1, "humanoids": "please reflash the website"}
     
     except Exception as e:
         logger.error(f"Error generating humanoid: {str(e)}", exc_info=True)

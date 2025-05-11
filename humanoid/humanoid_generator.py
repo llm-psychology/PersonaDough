@@ -199,9 +199,10 @@ class AIParameterAnalyzer(LLM_responder):
 
 # ========================================================================================
 
-class CharacterGenerator:
+class CharacterGenerator(LLM_responder):
     """人格生成主流程控制"""
     def __init__(self):
+        super().__init__()
         self.base_generator = BaseInfoGenerator()
         self.attribute_injector = AttributeInjector()
         self.story_generator = StoryGenerator()
@@ -209,7 +210,7 @@ class CharacterGenerator:
         self.summarized_behavior_generator = SummarizedBehaviorGenerator()
         self.parameter_analyzer = AIParameterAnalyzer()
 
-    async def generate_character(self):
+    async def generate_character_step(self):
         """生成完整角色資料"""
         # 步驟 1: 生成基本資料
         base_info = self.base_generator.generate()
@@ -236,6 +237,7 @@ class CharacterGenerator:
         ai_params = await self.parameter_analyzer.analyze(story)
         character_data["AI參數"] = ai_params
 
+        await self.photo_generate(character_data)
         return character_data
     
     async def save_character(self, character_data, filename=None):
@@ -253,13 +255,13 @@ class CharacterGenerator:
 
 # ========================================================================================
 
-async def main():
+async def generate_a_persona():
     # 建立角色生成器
     generator = CharacterGenerator()
     
     # 生成角色
     print("開始生成角色...")
-    character = await generator.generate_character()
+    character = await generator.generate_character_step()
     
     # 儲存角色資料
     filename = await generator.save_character(character)
@@ -276,7 +278,7 @@ async def run_all():
     # 並行 coroutine
     # 生成一個 persona 要花費5000token
     # 約10個 persona 花費 40秒
-    await asyncio.gather(*(main() for _ in range(NUM_GENERATE)))
+    await asyncio.gather(*(generate_a_persona() for _ in range(NUM_GENERATE)))
 
 if __name__ == "__main__":
     start = time.time()

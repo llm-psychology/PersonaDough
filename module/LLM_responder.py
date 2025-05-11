@@ -196,6 +196,7 @@ class LLM_responder:
 
 async def unit_test():
     # 23秒
+    # 生成PERSONA的圖片
     from module.PERSONA_loader import PersonaLoader
     test_persona = PersonaLoader()
     await test_persona.wait_until_ready()
