@@ -154,7 +154,7 @@ class QaLoader:
         return False
 
 # 使用範例
-async def main():
+async def unit_test():
     qaloader = QaLoader()
     await qaloader.wait_until_ready()
     '''
@@ -180,4 +180,4 @@ async def main():
         print(f"問題 {question.id}: {question.content}")
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(unit_test())

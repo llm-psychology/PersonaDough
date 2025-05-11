@@ -1,3 +1,4 @@
+# humanoid_generator.py
 import random
 import json
 from faker import Faker # update with more accurate zh-TW data
