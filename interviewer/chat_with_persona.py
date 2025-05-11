@@ -1,6 +1,7 @@
+# chat_with_persona.py
 import os
 import asyncio
-from interviewer_generator import Interviewer
+from interviewer.interviewer_generator import Interviewer
 from module.PERSONA_loader import PersonaLoader
 import time
 

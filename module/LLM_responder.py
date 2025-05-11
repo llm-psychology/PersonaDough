@@ -43,29 +43,29 @@ class LLM_responder:
             raise Exception(f"API 請求失敗: {str(e)}")
     
     async def chat_gpt_4o(self, prompt: str, temperature: int)->str:
-        """使用 chat.completions API透過gpt-4o的user回答單輪對話"""
+        """簡單對話-使用 chat.completions API透過gpt-4o的user回答單輪對話"""
         model = CHAT_MODEL_4O
         prompt = [{"role": "user", "content": prompt}]
         res = await self._call_chat_openai_api(model, prompt, temperature)
         return res.choices[0].message.content
-    
-    async def full_chat_gpt_4o(self, sys_prompt: str="", usr_prompt: str="", temperature: int=0.7)->str:
+    #================================================================================================================
+    async def full_chat_gpt_4o(self, sys_prompt: str="", usr_prompt: str="", temperature: int=0.7, top_p: int=1)->str:
         """使用 chat.completions API透過gpt-4o的自定義回答"單輪"對話
 
-        usage: full_chat_gpt_4o("你現在是數學教學小助手，不可以誤人子弟亂回答，要教給五歲小孩聽的", "回答一個題目是: 1+1=多少?", 0.3)"""
+        usage: full_chat_gpt_4o("你是數學教學小助手，不可以誤人子弟亂回答，要教給五歲小孩聽的", "回答一個題目是: 1+1=多少?", 0.3)"""
         model = CHAT_MODEL_4O
         prompt=[
             {"role": "system", "content": sys_prompt},
             {"role": "user", "content": usr_prompt},
         ]
-        res = await self._call_chat_openai_api(model, prompt, temperature)
+        res = await self._call_chat_openai_api(model, prompt, temperature, top_p)
         return res.choices[0].message.content
         
-    async def full_chat_gpt_41(self, sys_prompt: str="", usr_prompt: str="", temperature: int=0.7)->str:
+    async def full_chat_gpt_41(self, sys_prompt: str="", usr_prompt: str="", temperature: int=0.7, top_p: int=1)->str:
         """gpt4.1比較會遵守格式
         使用 chat.completions API透過gpt-4.1的自定義回答"單輪"對話
 
-        usage: full_chat_gpt_41("你現在是數學教學小助手，不可以誤人子弟亂回答，要教給五歲小孩聽的", "回答一個題目是: 1+1=多少?", 0.3)"""
+        usage: full_chat_gpt_41("你是數學教學小助手，不可以誤人子弟亂回答，要教給五歲小孩聽的", "回答一個題目是: 1+1=多少?", 0.3)"""
         model = CHAT_MODEL_41
         prompt=[
             {"role": "system", "content": sys_prompt},
@@ -75,7 +75,7 @@ class LLM_responder:
         res = await self._call_chat_openai_api(model, prompt, temperature, top_p)
         return res.choices[0].message.content
     
-    async def full_chat_gpt_41_mini(self, sys_prompt: str="", usr_prompt: str="", temperature: int=0.9)->str:
+    async def full_chat_gpt_41_mini(self, sys_prompt: str="", usr_prompt: str="", temperature: int=0.9, top_p: int=1)->str:
         """gpt4.1mini 
         使用 chat.completions API透過gpt-4.1-mini的自定義回答"單輪"對話
 
@@ -89,7 +89,7 @@ class LLM_responder:
         res = await self._call_chat_openai_api(model, prompt, temperature, top_p)
         return res.choices[0].message.content
     
-    async def full_chat_gpt_41_nano(self, sys_prompt: str="", usr_prompt: str="", temperature: int=0.9)->str:
+    async def full_chat_gpt_41_nano(self, sys_prompt: str="", usr_prompt: str="", temperature: int=0.9, top_p: int=1)->str:
         """gpt4.1nano 比較快比較不需要智商的
         使用 chat.completions API透過gpt-4.1-nano的自定義回答"單輪"對話
 
@@ -102,7 +102,7 @@ class LLM_responder:
         top_p = 1
         res = await self._call_chat_openai_api(model, prompt, temperature, top_p)
         return res.choices[0].message.content
-    
+    #================================================================================================================
     async def simulate_persona_answer(self, chat_messages: List[Dict[str, str]], model: str = CHAT_MODEL_4O) -> str:
         """使用 chat.completions API透過gpt-4o回答問題，相似的function: chat_gpt_4o()"""
         model = CHAT_MODEL_4O
