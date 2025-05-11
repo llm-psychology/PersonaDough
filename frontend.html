@@ -124,10 +124,15 @@ async function generateAgent() {
   spinnerCard.className = 'col-md-4';
   spinnerCard.id = 'generating-card';
   spinnerCard.innerHTML = `
-    <div class="p-3 humanoid-card d-flex justify-content-center align-items-center" style="height: 100%;">
-      <div class="spinner-border text-info" role="status"></div>
-      <span class="ms-2">生成中...</span>
-    </div>
+      <div class="card humanoid-card mb-2" id="generate-agent-card">
+        <div class="card-body">
+          <div class="p-3 d-flex justify-content-center align-items-center" style="height: 100%;">
+            <div class="spinner-border text-info" role="status"></div>
+            <span class="ms-2">生成中...</span>
+            <img src="" class="img-fluid rounded-circle">
+          </div>
+        </div>
+      </div>
   `;
 
   // 移除舊的 generate card，換成 spinner
