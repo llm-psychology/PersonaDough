@@ -5,6 +5,7 @@ import aiofiles
 from fastapi import FastAPI, Query, HTTPException, Path
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 import json
 import os
 from typing import List, Optional, Dict
@@ -34,7 +35,8 @@ from interviewer.chat_with_persona import (
     ChatWith
 )
 from interviewer.interviewer_generator import (
-    Interviewer
+    Interviewer,
+    generate_persona_rag_by_id
 )
 from humanoid.humanoid_generator import (
     BaseInfoGenerator, 
@@ -74,6 +76,12 @@ app.add_middleware(
 )
 
 # =======================================================
+# frontend
+@app.get("/")
+def serve_frontend():
+    return FileResponse("frontend.html", media_type="text/html")
+
+# =======================================================
 
 class Item(BaseModel):
     name: str
@@ -105,6 +113,7 @@ class InterviewResponse(BaseModel):
 
 # =======================================================
 
+'''
 @app.get("/", response_class=JSONResponse)
 async def root():
     """API root endpoint with basic information"""
@@ -118,7 +127,8 @@ async def root():
             "/search - Search humanoid agents with filters"
         ]
     }
-    
+'''
+
 @app.get("/image/{id}")
 async def get_image_by_id(id: str):
     image_path = os.path.join(PHOTO_DIR, f"{id}.png")
@@ -188,7 +198,8 @@ async def create_interview(request: InterviewRequest):
 async def generate_humanoid(count: int = Query(1, gt=0, le=10, description="Number of humanoids to generate")):
     """Generate one or more new humanoid agents"""
     try:
-        await generate_a_persona()
+        id = await generate_a_persona()
+        await generate_persona_rag_by_id(id)
         return {"success": True, "count": 1, "humanoids": "please reflash the website"}
     
     except Exception as e:

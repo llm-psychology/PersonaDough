@@ -148,10 +148,12 @@ class LLM_responder:
     async def _persona_to_prompt_reification(self, persona_base_info: str)->str:
         # 產生一張0.04usd
         # style: 這邊放prompt嗎? 感覺不整齊
+        # head in the middle prompt要補上去
         sys_prompt="""
             根據以下人物資料，生成一段用於圖像 AI 模型（如 DALL·E）的英文 prompt，描述他的證件照風格大頭照，背景為白色，鏡頭直視，專業且清晰，強調是亞洲人。根據年齡、性別、個性特質、語言風格、出生地等資訊，推理出這個人可能的外貌特徵（如微笑與否、眼神神情、髮型風格、服裝偏好、氣質感），並用英文精簡描述。
             輸出格式為：
-            "a professional headshot of [描述], white background, neutral lighting, studio style, passport photo, high resolution"
+            "Centered portrait with full head visible, not cropped, ample space above the head. Upper body in frame, symmetrical composition. A professional medium close up headshot of [描述], white background, neutral lighting, studio style, passport photo, high resolution"
+
             範例輸入：
             {
             "姓名": "林書豪",

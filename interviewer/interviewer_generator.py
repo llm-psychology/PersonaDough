@@ -54,7 +54,10 @@ class Interviewer(LLM_responder):
     # ========== 6. Build Simulation Prompt ==========
     def build_simulation_prompt(self, persona, retrieved_docs: List[str], user_query: str) -> List[Dict[str, str]]:
         memory_context = "\n".join(retrieved_docs) if retrieved_docs else "（無可參考的記憶資料）"
-        system_prompt = f"你是一個根據以下記憶資料模擬出來的人格：{persona['簡化行為']}\n{memory_context}\n根據這些資料，用一致的口吻與邏輯回答問題。"
+        system_prompt = f"""你是一個根據以下記憶資料模擬出來的人格：{persona['簡化行為']}\n{memory_context}\n
+            根據這些資料，用一致的口吻、用字遣詞、邏輯、口語化、對話模式來回答問題。你現在就是這個人，當有人問你是誰的時候，不能說你是AI助手，你要說出角色的名字。
+            需要仔細衡量人格的背景，年齡和人生經歷須符合，回答的內容講求台灣的真實歷史性，不要產生不一致或不合邏輯的資料。當使用者問了記憶
+            外的問題，需要注意這個人格會對於這件事情的熟悉度有多少，例如年輕人對於很久以前發生的事情可能就不會那麼熟悉，或是有一些老人對於近代時事梗可能不是那麼的理解。"""
         return [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_query}
@@ -344,6 +347,24 @@ async def process_persona(persona, interviewer:Interviewer, qaloader:QaLoader, p
     print(f"資料庫已自動儲存為：{persona_id}")
 
 # =========================================================
+async def generate_persona_rag_by_id(id:str):
+    # this unit test can generate all the interview result in humanoid database
+    interviewer = Interviewer()
+    qaloader = QaLoader()
+    await qaloader.wait_until_ready() #important: or it will return null
+    persona_loader = PersonaLoader()
+    await persona_loader.wait_until_ready() #important: or it will return null
+
+    persona_list = persona_loader.get_all_personas() #抓取所有persona
+    rag_data_dir = "interviewer/rag_database"
+    os.makedirs(rag_data_dir, exist_ok=True)
+    
+    existing_dbs = set()
+    if os.path.exists(rag_data_dir):
+        existing_dbs = set(d for d in os.listdir(rag_data_dir) 
+                          if os.path.isdir(os.path.join(rag_data_dir, d)))
+    print(f"幫 {id} 生成RAG資料庫")
+    await process_persona(persona_list[id], interviewer, qaloader, persona_loader, rag_data_dir, existing_dbs)
 
 async def unit_test():
     # this unit test can generate all the interview result in humanoid database
@@ -366,7 +387,6 @@ async def unit_test():
     print(f"總共有 {len(persona_list)} 個角色")
 
     # 建立最大一組2個 coroutine 任務
-
     sem = asyncio.Semaphore(2)
 
     async def limited_process_persona(persona):

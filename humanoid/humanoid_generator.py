@@ -255,7 +255,8 @@ class CharacterGenerator(LLM_responder):
 
 # ========================================================================================
 
-async def generate_a_persona():
+async def generate_a_persona()->str:
+    """@return 產生出來的persona的id"""
     # 建立角色生成器
     generator = CharacterGenerator()
     
@@ -273,6 +274,7 @@ async def generate_a_persona():
     print(f"性別: {character['基本資料']['性別']}")
     print(f"年齡: {character['基本資料']['年紀']}")
     print(f"人格特質: {', '.join(character['人格屬性']['人格特質'])}")
+    return character['基本資料']['id']
 
 async def run_all():
     # 並行 coroutine

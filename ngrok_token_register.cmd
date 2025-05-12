@@ -1,0 +1,1 @@
+ngrok config add-authtoken <token>

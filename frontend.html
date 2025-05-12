@@ -84,13 +84,13 @@
         </div>
         <form id="chat-form" class="d-flex">
           <input type="text" class="form-control message-input me-2" id="message-input" placeholder="請輸入訊息..." required>
-          <button type="submit" class="btn btn-primary">送出</button>
+          <button type="submit" class="btn btn-primary h2">送出</button>
         </form>
       </div>
       <div class="modal-footer">
         <div id="chat-loading-spinner" class="text-center" style="display:none;">
           <div class="spinner-border spinner-border-sm text-info" role="status"></div>
-          <span class="text-info ms-2">AI 回覆中...</span>
+          <span class="text-info ms-2">回覆處理中...</span>
         </div>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">關閉</button>
       </div>
@@ -102,7 +102,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
 <script>
-const apiBase = "http://127.0.0.1:20000"; // same host
+const apiBase = ""; // same host
 let currentPersonaId = null;
 let chatHistory = [];
 
@@ -128,7 +128,7 @@ async function generateAgent() {
         <div class="card-body">
           <div class="p-3 d-flex justify-content-center align-items-center" style="height: 100%;">
             <div class="spinner-border text-info" role="status"></div>
-            <span class="ms-2">生成中...</span>
+            <span class="ms-2">生成中...<br>最多耗時3分鐘</span>
             <img src="" class="img-fluid rounded-circle">
           </div>
         </div>
@@ -152,10 +152,26 @@ async function generateAgent() {
     const humanoids = await fetchHumanoids();
     renderHumanoidList(humanoids);
     showToast("成功生成新角色！");
-  } catch (err) {
+  } 
+  catch (err) {
     alert("生成角色失敗，請再試一次。");
     console.error(err);
-    spinnerCard.innerHTML = '<div class="text-danger">發生錯誤</div>';
+    spinnerCard.innerHTML = `
+      <div class="card humanoid-card mb-2" id="generate-agent-card">
+        <div class="card-body">
+          <div class="p-3 d-flex justify-content-center align-items-center" style="height: 100%;">
+            <span class="ms-2 text-danger">發生錯誤</span>
+            <img src="" class="img-fluid rounded-circle">
+          </div>
+        </div>
+      </div>
+    `;
+    
+    setTimeout(async function () {
+      const humanoids = await fetchHumanoids();
+      renderHumanoidList(humanoids);
+    }, 3000); // 單位是毫秒（ms），1000 ms = 1 秒
+
   }
 }
 
@@ -201,7 +217,7 @@ async function startInterview(personaId, numRounds = 6) {
   });
   document.getElementById('loading-spinner').style.display = 'none';
   if (!resp.ok) {
-    alert("AI 訪談產生失敗");
+    alert("代理訪談產生失敗");
     return [];
   }
   const data = await resp.json();
@@ -222,15 +238,17 @@ async function sendChatMessage(message) {
     });
     
     if (!resp.ok) {
-      throw new Error("AI 回覆失敗");
+      throw new Error("回覆失敗");
     }
     
     const data = await resp.json();
     return data.qa_pairs[0]?.a;
-  } catch (error) {
+  } 
+  catch (error) {
     console.error("Chat error:", error);
     return "抱歉，發生錯誤，請再試一次。";
-  } finally {
+  } 
+  finally {
     document.getElementById('chat-loading-spinner').style.display = 'none';
   }
 }
@@ -313,11 +331,10 @@ function renderHumanoidList(humanoids) {
           <div class="row">
             <div class="col-4">
               <img src="" class="img-fluid rounded-circle">
-              <i class="bi bi-person-plus img-fluid rounded-circle" style="height: 100%; font-size: 3rem; flex-direction: column; justify-content: center;"></i>
+              <i class="bi bi-person-plus img-fluid rounded-circle" style="height: 100%; font-size: 4rem; flex-direction: column; justify-content: center;"></i>
             </div>
-            <div class="col-8">
-              <h4 class="card-title" style="text-align: center;">再生成一個角色</h4>
-              <p class="card-text text-secondary" style="visibility: hidden;"></code></p>
+            <div class="col-8 d-flex align-items-center justify-content-center">
+              <h4 class="card-title text-center">再生成一個角色</h4>
             </div>
           </div>
         </div>
@@ -389,7 +406,7 @@ function openChatModal(personaId, personaName) {
   chatModal.show();
   
   // Add welcome message
-  addMessageToChat(`您好！我是${personaName}。很高興與您交流，請問有什麼我可以幫助您的嗎？`, false);
+  addMessageToChat(`您好！我是${personaName} 可以問我一些有的沒的`, false);
 }
 
 async function launchInterview(personaId, personaName) {

@@ -7,6 +7,7 @@ humanoid/humanoid_database
 not_upload/
 interviewer/rag_database/
 humanoid/humanoid_database/disuse
+ngrok.exe
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
