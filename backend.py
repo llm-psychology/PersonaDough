@@ -58,6 +58,10 @@ PHOTO_DIR = DATABASE_PATH + "/photo/"
 os.makedirs(PHOTO_DIR, exist_ok=True)
 character_generator = CharacterGenerator() # Initialize character generator
 
+# New: conversation history database
+CONVERSATION_HISTORY_PATH = "conversation_history"
+os.makedirs(CONVERSATION_HISTORY_PATH, exist_ok=True)
+
 # =======================================================
 
 app = FastAPI(
@@ -106,28 +110,30 @@ class HumanoidFilter(BaseModel):
 class InterviewRequest(BaseModel):
     persona_id: str | None = None
     num_rounds: int = 10
-    static_interview_data: str = ""  # 可以傳入先前的訪談紀錄
+    static_interview_data: str = ""  # User's input question
+    session_id: Optional[str] = None  # New: session ID to maintain conversation history
 
 class InterviewResponse(BaseModel):
     qa_pairs: List[Dict[str, str]]
+    session_id: str  # Return the session ID for the client to use in subsequent requests
+
+# New: Helper functions for conversation history management
+async def load_conversation_history(session_id: str) -> List[Dict[str, str]]:
+    """Load conversation history for a given session"""
+    history_file = os.path.join(CONVERSATION_HISTORY_PATH, f"{session_id}.json")
+    if os.path.exists(history_file):
+        async with aiofiles.open(history_file, "r", encoding="utf-8") as f:
+            content = await f.read()
+            return json.loads(content)
+    return []
+
+async def save_conversation_history(session_id: str, history: List[Dict[str, str]]):
+    """Save conversation history for a given session"""
+    history_file = os.path.join(CONVERSATION_HISTORY_PATH, f"{session_id}.json")
+    async with aiofiles.open(history_file, "w", encoding="utf-8") as f:
+        await f.write(json.dumps(history, ensure_ascii=False, indent=2))
 
 # =======================================================
-
-'''
-@app.get("/", response_class=JSONResponse)
-async def root():
-    """API root endpoint with basic information"""
-    return {
-        "message": "Humanoid Agent API",
-        "version": "1.0.0",
-        "endpoints": [
-            "/generate - Generate new humanoid agents",
-            "/humanoids - List all humanoid agents",
-            "/humanoids/{id} - Get a specific humanoid agent",
-            "/search - Search humanoid agents with filters"
-        ]
-    }
-'''
 
 @app.get("/image/{id}")
 async def get_image_by_id(id: str):
@@ -143,26 +149,44 @@ async def create_item(item: Item):
 @app.post("/interviews", response_model=InterviewResponse)
 async def create_interview(request: InterviewRequest):
     """
-    Handle interview requests including both automated interview generation and chat interactions.
-    
-    The endpoint serves two purposes:
-    1. Generate automated interviews with preset questions
-    2. Respond to user chat messages in real-time
+    Handle interview requests with conversation history support.
+    Uses session_id to maintain continuity between requests.
     """
     try:
         if not request.persona_id:
             raise HTTPException(status_code=400, detail="Persona ID is required")
-        
+            
         # Initialize chat handler
         chatbot = ChatWith()
         await chatbot.wait_until_ready()  # important
         
-        # Get input from request - either use static data as direct question or generate a default
-        user_question = request.static_interview_data
-        logger.info(f"使用者輸入: {user_question}")
+        # Get or create session ID
+        session_id = request.session_id
+        if not session_id:
+            # Generate a new session ID if none provided
+            import uuid
+            session_id = f"{request.persona_id}_{str(uuid.uuid4())[:8]}"
+            logger.info(f"Created new session: {session_id}")
+            history = []
+        else:
+            # Load existing conversation history
+            history = await load_conversation_history(session_id)
+            logger.info(f"Loaded session {session_id} with {len(history)} previous exchanges")
         
-        # Load persona data from database
+        # Get user input from request
+        user_question = request.static_interview_data
+        logger.info(f"User input: {user_question}")
+        
+        # Load persona data and RAG database
         index, docs, qa_docs = await chatbot.interviewer_obj.load_rag_database(request.persona_id)
+        
+        # Format conversation history for context
+        conversation_context = ""
+        if history:
+            conversation_context = "Previous conversation:\n" + "\n".join([
+                f"User: {exchange['q']}\nPersona: {exchange['a']}" 
+                for exchange in history[-5:]  # Include last 5 exchanges for context
+            ])
         
         # Retrieve similar documents for context
         retrieved, distances = await chatbot.interviewer_obj.retrieve_similar_docs(user_question, index, docs)
@@ -171,28 +195,67 @@ async def create_interview(request: InterviewRequest):
         if len(distances) > 0 and all(dist < 0.5 for dist in distances):  # dist越小，離原話越近
             retrieved = None
         
-        # Build prompt with persona data and context
-        prompt = chatbot.interviewer_obj.build_simulation_prompt(
-            chatbot.persona_loader_obj.personas[request.persona_id], 
-            retrieved, user_question
-        )
+        # Build prompt with persona data, conversation history, and context
+        persona_data = chatbot.persona_loader_obj.personas[request.persona_id]
+        
+        # Build enhanced prompt that includes conversation history
+        prompt = []
+        system_content = f"""你是一個根據以下記憶資料模擬出來的人格：{persona_data['簡化行為']}\n
+        記憶資料：
+        {"\n".join(retrieved) if retrieved else "（無可參考的記憶資料）"}
+        
+        {conversation_context if conversation_context else ""}
+        
+        根據這些資料，用一致的口吻、用字遣詞、邏輯、口語化、對話模式來回答問題。你現在就是這個人，當有人問你是誰的時候，不能說你是AI助手，你要說出角色的名字。
+        需要仔細衡量人格的背景，年齡和人生經歷須符合，回答的內容講求台灣的真實歷史性，不要產生不一致或不合邏輯的資料。
+        仔細評估人格的語氣，情緒可以有點起伏，不要過度的正向，維持上下文的情緒。如果沒有上下文就維持平平的，無需過度開心或是憤怒。
+        回應要保持連貫性，記住前面的對話內容，讓整個對話流程自然，減少反問使用者的機會。
+        """
+        
+        prompt = [
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": user_question}
+        ]
         
         # Generate AI response
         answer = await chatbot.interviewer_obj.simulate_persona_answer(prompt)
-        logger.info(f"回覆輸出: {answer}")
-        # Format response
-        qa_pairs = [{"q": user_question, "a": answer}] #front-end的return data.qa_pairs[0].a去接
+        logger.info(f"Response output: {answer}")
         
-        # If multiple rounds are requested (for automated interview)
-        if request.num_rounds > 1 and not request.static_interview_data:
-            # TODO: Implement multi-round interview generation logic here
-            pass
-            
-        return InterviewResponse(qa_pairs=qa_pairs)
+        # Add new exchange to history
+        new_exchange = {"q": user_question, "a": answer}
+        history.append(new_exchange)
+        
+        # Save updated history
+        await save_conversation_history(session_id, history)
+        
+        # Format response
+        qa_pairs = [new_exchange]  # Just return the latest exchange
+        
+        return InterviewResponse(qa_pairs=qa_pairs, session_id=session_id)
         
     except Exception as e:
         logger.error(f"Interview API failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+# New: endpoint to clear conversation history
+@app.delete("/interviews/{session_id}")
+async def clear_conversation_history(session_id: str):
+    """Clear the conversation history for a given session"""
+    history_file = os.path.join(CONVERSATION_HISTORY_PATH, f"{session_id}.json")
+    if os.path.exists(history_file):
+        os.remove(history_file)
+        return {"success": True, "message": f"Conversation history for session {session_id} cleared"}
+    raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+
+@app.get("/interviews/{session_id}")
+async def get_conversation_history(session_id: str):
+    """Get the full conversation history for a given session"""
+    try:
+        history = await load_conversation_history(session_id)
+        return {"success": True, "session_id": session_id, "history": history}
+    except Exception as e:
+        logger.error(f"Error retrieving conversation history: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error retrieving conversation history: {str(e)}")
 
 @app.post("/generate", response_class=JSONResponse)
 async def generate_humanoid(count: int = Query(1, gt=0, le=10, description="Number of humanoids to generate")):

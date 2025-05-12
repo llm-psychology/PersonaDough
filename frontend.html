@@ -94,6 +94,7 @@
         </div>
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">關閉</button>
       </div>
+    <button type="button" id="reset-conversation-btn" class="btn btn-warning">重置對話</button>
     </div>
   </div>
 </div>
@@ -105,6 +106,23 @@
 const apiBase = ""; // same host
 let currentPersonaId = null;
 let chatHistory = [];
+
+
+// Add this event handler in the setupChatForm function or in window.onload
+document.getElementById('reset-conversation-btn').addEventListener('click', async () => {
+  if (sessionId) {
+    try {
+      await fetch(`${apiBase}/interviews/${sessionId}`, {
+        method: 'DELETE'
+      });
+      sessionId = null;
+      document.getElementById('message-container').innerHTML = '';
+      addMessageToChat(`您好！我是${document.getElementById('chat-persona-name').innerText} 可以問我一些有的沒的`, false);
+    } catch (error) {
+      console.error("Failed to reset conversation:", error);
+    }
+  }
+});
 
 async function fetchHumanoids() {
   const resp = await fetch(apiBase + "/humanoids");
@@ -224,6 +242,7 @@ async function startInterview(personaId, numRounds = 6) {
   return data.qa_pairs ?? [];
 }
 
+// Update this function
 async function sendChatMessage(message) {
   document.getElementById('chat-loading-spinner').style.display = '';
   try {
@@ -233,7 +252,8 @@ async function sendChatMessage(message) {
       body: JSON.stringify({ 
         persona_id: currentPersonaId, 
         num_rounds: 1, 
-        static_interview_data: message 
+        static_interview_data: message,
+        session_id: sessionId  // Add this line to pass the session ID
       })
     });
     
@@ -242,6 +262,8 @@ async function sendChatMessage(message) {
     }
     
     const data = await resp.json();
+    // Store the session ID from the response
+    sessionId = data.session_id;  // Add this line to save the session ID
     return data.qa_pairs[0]?.a;
   } 
   catch (error) {
@@ -380,8 +402,9 @@ async function selectPersona(id, name) {
 }
 
 function openChatModal(personaId, personaName) {
-  // Reset chat history
+  // Reset chat history and session ID
   chatHistory = [];
+  sessionId = null;  // Add this line to reset the session ID
   document.getElementById('message-container').innerHTML = '';
   document.getElementById('chat-persona-name').innerText = personaName;
   
