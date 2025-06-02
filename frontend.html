@@ -20,9 +20,9 @@
     .card-selected { border:2.5px solid #65eaff;}
     .list-inline button { background:none; border:none; color:#85b8fa;}
     .list-inline button.active, .list-inline button:focus {color:#fff; font-weight:bold;}
-    .chat-message { margin-bottom: 15px; }
-    .user-message { background-color: #2c3b5a; color: white; padding: 10px 15px; border-radius: 8px 8px 0 8px; align-self: flex-end; max-width: 80%; }
-    .ai-message { background-color: #1a2436; color: #eaeef5; padding: 10px 15px; border-radius: 8px 8px 8px 0; align-self: flex-start; max-width: 80%; }
+    .chat-message { margin-bottom: 20px; }
+    .user-message { background-color: #2c3b5a; color: white; padding: 12px 16px; border-radius: 8px 8px 0 8px; align-self: flex-end; max-width: 80%; font-size: 1rem; line-height: 1.5; }
+    .ai-message { background-color: #1a2436; color: #eaeef5; padding: 12px 16px; border-radius: 8px 8px 8px 0; align-self: flex-start; max-width: 80%; font-size: 1rem; line-height: 1.5; }
     .message-container { display: flex; flex-direction: column; height: 300px; overflow-y: auto; padding: 15px; background: #1e2942; border-radius: 8px; margin-bottom: 10px; }
     .message-input { border-radius: 8px; background: #2c3b5a; color: white; border: 1px solid #3a496c; }
     .message-input:focus { background: #2c3b5a; color: white; }
@@ -40,12 +40,104 @@
     .btn-generate { background: #60e1e6; color: #161b29; border: none; padding: 10px 15px; border-radius: 50%; width: 60px; height: 60px; box-shadow: 0 0 15px rgba(96, 225, 230, 0.5); transition: all 0.3s; }
     .btn-generate:hover { transform: scale(1.1); box-shadow: 0 0 20px rgba(96, 225, 230, 0.7); }
     #generate-spinner { display: none; }
+    /* 修改和添加新的樣式 */
+    .persona-selector {
+      max-height: 400px;
+      overflow-y: auto;
+      padding: 10px;
+      background: #1a2436;
+      border-radius: 8px;
+    }
+    .persona-selector-card {
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-bottom: 10px;
+      background: #232846 !important;
+    }
+    .persona-selector-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    .persona-selector-card.card-selected {
+      border: 2px solid #60e1e6;
+      box-shadow: 0 0 10px rgba(96,225,230,0.5);
+    }
+    .persona-selector-card .card-body {
+      padding: 15px;
+    }
+    .persona-selector-card img {
+      width: 60px;
+      height: 60px;
+      object-fit: cover;
+    }
+    #dialogue-container {
+      height: 500px;
+      background: #1e2942;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 20px;
+    }
+    #persona-dialogue-modal .modal-content {
+      background: #232846;
+      color: white;
+      min-height: 80vh;
+    }
+    #persona-dialogue-modal .modal-body {
+      padding: 20px;
+    }
+    #persona-dialogue-modal .card {
+      border: 1px solid #374773;
+      border-radius: 10px;
+    }
+    #persona-dialogue-modal .form-control {
+      background: #2c3b5a;
+      border: 1px solid #3a496c;
+      color: white;
+      padding: 12px;
+      font-size: 1rem;
+    }
+    #persona-dialogue-modal .form-label {
+      color: #dee4ef;
+      font-size: 1rem;
+      margin-bottom: 8px;
+    }
+    /* 自定義滾動條樣式 */
+    .persona-selector::-webkit-scrollbar {
+      width: 8px;
+    }
+    .persona-selector::-webkit-scrollbar-track {
+      background: #1a2436;
+      border-radius: 4px;
+    }
+    .persona-selector::-webkit-scrollbar-thumb {
+      background: #3a496c;
+      border-radius: 4px;
+    }
+    .persona-selector::-webkit-scrollbar-thumb:hover {
+      background: #4a5a7c;
+    }
+    /* 調整對話氣泡樣式 */
+    .chat-message {
+      margin-bottom: 20px;
+    }
+    .user-message, .ai-message {
+      padding: 12px 16px;
+      font-size: 1rem;
+      line-height: 1.5;
+    }
+    .badge {
+      font-size: 0.85rem;
+      padding: 5px 10px;
+    }
   </style>
 </head>
 <body>
 <nav class="navbar navbar-dark bg-dark mb-4">
   <div class="container">
     <span class="navbar-brand mb-0 h1"><i class="bi bi-person-bounding-box"></i> Persona Dough <small class="text-secondary">| AI Humanoid Agent Demo</small></span>
+    <button class="btn btn-outline-info" id="open-dialogue-modal-btn">
+      <i class="bi bi-chat-dots"></i> 角色對話
+    </button>
   </div>
 </nav>
 <div class="container">
@@ -99,6 +191,59 @@
   </div>
 </div>
 
+<!-- 在 Chat Modal 後面添加新的 Persona Dialogue Modal -->
+<div class="modal fade" id="persona-dialogue-modal" tabindex="-1" aria-labelledby="persona-dialogue-modal-label" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="persona-dialogue-modal-label">角色對話</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row mb-4">
+          <div class="col-md-6">
+            <div class="card bg-dark h-100">
+              <div class="card-body">
+                <h6 class="card-title mb-3">選擇第一個角色</h6>
+                <div class="persona-selector" id="persona1-selector"></div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="card bg-dark h-100">
+              <div class="card-body">
+                <h6 class="card-title mb-3">選擇第二個角色</h6>
+                <div class="persona-selector" id="persona2-selector"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row mb-4">
+          <div class="col-md-8">
+            <label for="initial-topic" class="form-label">初始對話主題</label>
+            <input type="text" class="form-control message-input" id="initial-topic" value="你好，很高興認識你">
+          </div>
+          <div class="col-md-4">
+            <label for="num-rounds" class="form-label">對話回合數</label>
+            <input type="number" class="form-control message-input" id="num-rounds" value="5" min="1" max="10">
+          </div>
+        </div>
+        <div class="message-container" id="dialogue-container">
+          <!-- 對話內容將在這裡動態添加 -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <div id="dialogue-loading-spinner" class="text-center" style="display:none;">
+          <div class="spinner-border spinner-border-sm text-info" role="status"></div>
+          <span class="text-info ms-2">對話生成中...</span>
+        </div>
+        <button type="button" class="btn btn-primary" id="start-dialogue-btn">開始對話</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">關閉</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Bootstrap & Icons -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
@@ -106,6 +251,9 @@
 const apiBase = ""; // same host
 let currentPersonaId = null;
 let chatHistory = [];
+let selectedPersona1 = null;
+let selectedPersona2 = null;
+let dialogueSessionId = null;
 
 
 // Add this event handler in the setupChatForm function or in window.onload
@@ -193,8 +341,7 @@ async function generateAgent() {
   }
 }
 
-function showToast(message) {
-  // Create toast container if it doesn't exist
+function showToast(message, type = 'success') {
   if (!document.getElementById('toast-container')) {
     const toastContainer = document.createElement('div');
     toastContainer.id = 'toast-container';
@@ -210,7 +357,7 @@ function showToast(message) {
         <strong class="me-auto">通知</strong>
         <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
       </div>
-      <div class="toast-body bg-success text-white">
+      <div class="toast-body bg-${type} text-white">
         ${message}
       </div>
     </div>
@@ -457,12 +604,163 @@ function renderQAList(qas) {
   });
 }
 
+function setupPersonaDialogue() {
+  // 設置打開對話模態框的按鈕
+  document.getElementById('open-dialogue-modal-btn').addEventListener('click', () => {
+    const modal = new bootstrap.Modal(document.getElementById('persona-dialogue-modal'));
+    modal.show();
+    renderPersonaSelectors();
+  });
+
+  // 設置開始對話按鈕
+  document.getElementById('start-dialogue-btn').addEventListener('click', startPersonaDialogue);
+}
+
+async function renderPersonaSelectors() {
+  const humanoids = await fetchHumanoids();
+  const selector1 = document.getElementById('persona1-selector');
+  const selector2 = document.getElementById('persona2-selector');
+  
+  // 清空選擇器
+  selector1.innerHTML = '';
+  selector2.innerHTML = '';
+  
+  // 為每個選擇器添加角色卡片
+  humanoids.forEach(h => {
+    const card1 = createPersonaSelectorCard(h, 'persona1');
+    const card2 = createPersonaSelectorCard(h, 'persona2');
+    selector1.appendChild(card1);
+    selector2.appendChild(card2);
+  });
+}
+
+function createPersonaSelectorCard(humanoid, selectorType) {
+  const card = document.createElement('div');
+  card.className = 'card humanoid-card mb-2 persona-selector-card';
+  card.dataset.id = humanoid.id;
+  card.innerHTML = `
+    <div class="card-body">
+      <div class="row">
+        <div class="col-4">
+          <img src="${apiBase}/image/${humanoid.id}" class="img-fluid rounded-circle" alt="${humanoid.name}" 
+               onerror="this.src='https://via.placeholder.com/80?text=無圖片'">
+        </div>
+        <div class="col-8">
+          <h6 class="card-title">${humanoid.name}</h6>
+          <p class="card-text text-secondary"><small>ID: ${humanoid.id}</small></p>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  card.addEventListener('click', () => selectPersonaForDialogue(humanoid, selectorType));
+  return card;
+}
+
+function selectPersonaForDialogue(humanoid, selectorType) {
+  // 移除其他卡片的選中狀態
+  document.querySelectorAll(`#${selectorType}-selector .persona-selector-card`).forEach(card => {
+    card.classList.remove('card-selected');
+  });
+  
+  // 選中當前卡片
+  const selectedCard = document.querySelector(`#${selectorType}-selector .persona-selector-card[data-id="${humanoid.id}"]`);
+  selectedCard.classList.add('card-selected');
+  
+  // 更新選中的角色
+  if (selectorType === 'persona1') {
+    selectedPersona1 = humanoid;
+  } else {
+    selectedPersona2 = humanoid;
+  }
+}
+
+async function startPersonaDialogue() {
+  if (!selectedPersona1 || !selectedPersona2) {
+    showToast('請選擇兩個角色進行對話', 'warning');
+    return;
+  }
+  
+  if (selectedPersona1.id === selectedPersona2.id) {
+    showToast('請選擇不同的角色進行對話', 'warning');
+    return;
+  }
+  
+  const initialTopic = document.getElementById('initial-topic').value.trim();
+  const numRounds = parseInt(document.getElementById('num-rounds').value);
+  
+  if (!initialTopic) {
+    showToast('請輸入初始對話主題', 'warning');
+    return;
+  }
+  
+  // 顯示載入動畫
+  document.getElementById('dialogue-loading-spinner').style.display = '';
+  document.getElementById('dialogue-container').innerHTML = '';
+  
+  try {
+    const response = await fetch(`${apiBase}/persona-dialogue`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        persona1_id: selectedPersona1.id,
+        persona2_id: selectedPersona2.id,
+        num_rounds: numRounds,
+        initial_topic: initialTopic,
+        session_id: dialogueSessionId
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error('對話生成失敗');
+    }
+    
+    const data = await response.json();
+    dialogueSessionId = data.session_id;
+    
+    // 渲染對話內容
+    renderDialogueContent(data.dialogue_rounds);
+    
+  } catch (error) {
+    console.error('Dialogue error:', error);
+    showToast('對話生成失敗，請重試', 'danger');
+  } finally {
+    document.getElementById('dialogue-loading-spinner').style.display = 'none';
+  }
+}
+
+function renderDialogueContent(dialogueRounds) {
+  const container = document.getElementById('dialogue-container');
+  container.innerHTML = '';
+  
+  dialogueRounds.forEach(round => {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'chat-message d-flex ' + 
+      (round.speaker === selectedPersona1.name ? 'justify-content-start' : 'justify-content-end');
+    
+    const messageBubble = document.createElement('div');
+    messageBubble.className = round.speaker === selectedPersona1.name ? 'ai-message' : 'user-message';
+    
+    const speakerSpan = document.createElement('span');
+    speakerSpan.className = 'badge bg-info me-2';
+    speakerSpan.textContent = round.speaker;
+    
+    messageBubble.appendChild(speakerSpan);
+    messageBubble.appendChild(document.createTextNode(round.content));
+    messageDiv.appendChild(messageBubble);
+    container.appendChild(messageDiv);
+  });
+  
+  container.scrollTop = container.scrollHeight;
+}
+
 window.onload = async () => {
   document.getElementById("interview-section").style.display = "none";
   document.getElementById("persona-detail").style.display = "none";
   const humanoids = await fetchHumanoids();
   renderHumanoidList(humanoids);
   setupChatForm();
+  setupPersonaDialogue();
 }
 </script>
 </body>

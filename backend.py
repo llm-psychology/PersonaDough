@@ -48,6 +48,7 @@ from humanoid.humanoid_generator import (
     CharacterGenerator,
     generate_a_persona
 )
+from interviewer.persona_dialogue import PersonaDialogueManager
 
 # =======================================================
 
@@ -116,6 +117,19 @@ class InterviewRequest(BaseModel):
 class InterviewResponse(BaseModel):
     qa_pairs: List[Dict[str, str]]
     session_id: str  # Return the session ID for the client to use in subsequent requests
+
+class PersonaDialogueRequest(BaseModel):
+    persona1_id: str
+    persona2_id: str
+    num_rounds: int = 5
+    initial_topic: str = "你好，很高興認識你"
+    session_id: Optional[str] = None
+
+class PersonaDialogueResponse(BaseModel):
+    dialogue_rounds: List[Dict[str, str]]
+    session_id: str
+
+# =======================================================
 
 # New: Helper functions for conversation history management
 async def load_conversation_history(session_id: str) -> List[Dict[str, str]]:
@@ -429,6 +443,32 @@ async def search_humanoids(filter_params: HumanoidFilter):
     except Exception as e:
         logger.error(f"Error searching humanoids: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error searching humanoids: {str(e)}")
+
+# 初始化對話管理器
+dialogue_manager = PersonaDialogueManager()
+
+@app.post("/persona-dialogue", response_model=PersonaDialogueResponse)
+async def create_persona_dialogue(request: PersonaDialogueRequest):
+    """
+    讓兩個 persona 進行對話
+    """
+    try:
+        dialogue_rounds, session_id = await dialogue_manager.conduct_dialogue(
+            persona1_id=request.persona1_id,
+            persona2_id=request.persona2_id,
+            num_rounds=request.num_rounds,
+            initial_topic=request.initial_topic,
+            session_id=request.session_id
+        )
+        
+        return PersonaDialogueResponse(
+            dialogue_rounds=dialogue_rounds,
+            session_id=session_id
+        )
+        
+    except Exception as e:
+        logger.error(f"Persona dialogue API failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Start the server
 if __name__ == "__main__":
