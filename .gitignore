@@ -8,6 +8,7 @@ not_upload/
 interviewer/rag_database/
 humanoid/humanoid_database/disuse
 ngrok.exe
+conversation_history/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
