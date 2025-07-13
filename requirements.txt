@@ -10,3 +10,4 @@ aiohttp
 fastapi
 flask
 flask-cors
+uvicorn
