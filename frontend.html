@@ -53,6 +53,7 @@
       transition: all 0.3s ease;
       margin-bottom: 10px;
       background: #232846 !important;
+      color: white !important;
     }
     .persona-selector-card:hover {
       transform: translateY(-2px);
@@ -129,15 +130,203 @@
       font-size: 0.85rem;
       padding: 5px 10px;
     }
+    
+    /* 群組對話樣式 */
+    #group-dialogue-modal .modal-content {
+      background: #232846;
+      color: white;
+      max-height: 90vh;
+      z-index: 1055;
+      display: flex;
+      flex-direction: column;
+    }
+    #group-dialogue-modal .modal-body {
+      padding: 20px;
+      overflow-y: auto;
+      flex: 1;
+    }
+    #group-dialogue-modal .card {
+      border: 1px solid #374773;
+      border-radius: 10px;
+    }
+    #group-dialogue-modal .form-control {
+      background: #2c3b5a;
+      border: 1px solid #3a496c;
+      color: white !important;
+      padding: 12px;
+      font-size: 1rem;
+    }
+    #group-dialogue-modal .form-control::placeholder {
+      color: #a0a0a0 !important;
+    }
+    #group-dialogue-modal .form-label {
+      color: #dee4ef !important;
+      font-size: 1rem;
+      margin-bottom: 8px;
+    }
+    #group-dialogue-modal .card-title {
+      color: white !important;
+    }
+    #group-dialogue-modal .card-text {
+      color: #dee4ef !important;
+    }
+    #group-dialogue-modal .text-muted {
+      color: #a0a0a0 !important;
+    }
+    #group-dialogue-modal .form-check-label {
+      color: white !important;
+    }
+    .group-persona-selector {
+      max-height: 300px;
+      overflow-y: auto;
+      padding: 10px;
+      background: #1a2436;
+      border-radius: 8px;
+      border: 2px dashed #3a496c;
+      transition: all 0.3s ease;
+      color: white;
+    }
+    .group-persona-selector.has-selections {
+      border-color: #60e1e6;
+      border-style: solid;
+    }
+    .selected-personas-display {
+      background: #2c3b5a;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 15px;
+      min-height: 60px;
+    }
+    .selected-persona-badge {
+      background: #60e1e6;
+      color: #161b29;
+      padding: 8px 12px;
+      border-radius: 20px;
+      margin: 5px;
+      display: inline-block;
+      position: relative;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .selected-persona-badge:hover {
+      background: #4ac5ca;
+      transform: scale(1.05);
+    }
+    .selected-persona-badge .remove-btn {
+      margin-left: 8px;
+      font-weight: bold;
+      color: #161b29;
+    }
+    .speaking-order-container {
+      background: #1e2942;
+      border-radius: 8px;
+      padding: 15px;
+      margin-top: 10px;
+    }
+    .order-item {
+      background: #2c3b5a;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin: 5px;
+      display: inline-block;
+      cursor: move;
+      transition: all 0.3s ease;
+      border: 1px solid #3a496c;
+      color: white;
+    }
+    .order-item:hover {
+      background: #3a496c;
+      transform: translateY(-2px);
+    }
+    .order-item.dragging {
+      opacity: 0.5;
+      transform: scale(1.1);
+    }
+    .group-dialogue-bubble {
+      position: relative;
+      margin-bottom: 15px;
+      color: white;
+    }
+    .group-dialogue-bubble .speaker-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid #60e1e6;
+    }
+    .group-dialogue-bubble .speaker-name {
+      background: #60e1e6;
+      color: #161b29;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.8rem;
+      font-weight: bold;
+      margin-bottom: 5px;
+      display: inline-block;
+    }
+    .group-dialogue-content {
+      background: #2c3b5a;
+      padding: 12px 16px;
+      border-radius: 8px;
+      margin-left: 50px;
+      position: relative;
+      color: white;
+    }
+    .group-dialogue-content::before {
+      content: '';
+      position: absolute;
+      left: -10px;
+      top: 10px;
+      width: 0;
+      height: 0;
+      border-top: 10px solid transparent;
+      border-bottom: 10px solid transparent;
+      border-right: 10px solid #2c3b5a;
+    }
+    #group-dialogue-container {
+      height: 280px;
+      max-height: 280px;
+      background: #1e2942;
+      border-radius: 8px;
+      padding: 15px;
+      overflow-y: auto;
+      color: white;
+      position: relative;
+      z-index: 1;
+      margin-bottom: 15px;
+    }
+    
+    .dialogue-pool-info-card {
+      background: linear-gradient(135deg, rgba(25, 135, 84, 0.15), rgba(13, 202, 240, 0.1));
+      border: 1px solid rgba(25, 135, 84, 0.4);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 15px;
+      backdrop-filter: blur(5px);
+    }
+
+    .dialogue-pool-info-card .text-success {
+      color: #20c997 !important;
+    }
+
+    .dialogue-pool-info-card .text-muted {
+      color: #adb5bd !important;
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
 <nav class="navbar navbar-dark bg-dark mb-4">
   <div class="container">
     <span class="navbar-brand mb-0 h1"><i class="bi bi-person-bounding-box"></i> Persona Dough <small class="text-secondary">| AI Humanoid Agent Demo</small></span>
-    <button class="btn btn-outline-info" id="open-dialogue-modal-btn">
-      <i class="bi bi-chat-dots"></i> 角色對話
-    </button>
+    <div class="btn-group">
+      <button class="btn btn-outline-info" id="open-dialogue-modal-btn">
+        <i class="bi bi-chat-dots"></i> 雙人對話
+      </button>
+      <button class="btn btn-outline-success" id="open-group-dialogue-modal-btn">
+        <i class="bi bi-people"></i> 群組對話
+      </button>
+    </div>
   </div>
 </nav>
 <div class="container">
@@ -244,6 +433,113 @@
   </div>
 </div>
 
+<!-- 群組對話模態框 -->
+<div class="modal fade" id="group-dialogue-modal" tabindex="-1" aria-labelledby="group-dialogue-modal-label" aria-hidden="true" style="z-index: 1060;">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="group-dialogue-modal-label">
+          <i class="bi bi-people"></i> 群組對話
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row mb-4">
+          <!-- 左側：角色選擇 -->
+          <div class="col-md-6">
+            <div class="card bg-dark h-100">
+              <div class="card-body">
+                <h6 class="card-title mb-3">
+                  <i class="bi bi-person-plus"></i> 選擇參與對話的角色 (2-10人)
+                </h6>
+                
+                <!-- 已選擇的角色顯示區域 -->
+                <div class="selected-personas-display" id="selected-personas-display">
+                  <small class="text-muted">請從下方選擇角色...</small>
+                </div>
+                
+                <!-- 角色選擇器 -->
+                <div class="group-persona-selector" id="group-persona-selector">
+                  <!-- 角色卡片將在這裡動態添加 -->
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 右側：設定選項 -->
+          <div class="col-md-6">
+            <div class="card bg-dark h-100">
+              <div class="card-body">
+                <h6 class="card-title mb-3">
+                  <i class="bi bi-gear"></i> 對話設定
+                </h6>
+                
+                <div class="mb-3">
+                  <label for="group-initial-topic" class="form-label">初始對話主題</label>
+                  <input type="text" class="form-control message-input" id="group-initial-topic" 
+                         value="大家好，很高興認識各位" placeholder="輸入對話主題...">
+                </div>
+                
+                <div class="mb-3">
+                  <label for="group-num-rounds" class="form-label">對話回合數</label>
+                  <input type="number" class="form-control message-input" id="group-num-rounds" 
+                         value="5" min="1" max="15">
+                  <small class="text-muted">使用動態對話池，角色會根據興趣自由發言</small>
+                </div>
+                
+                <div class="dialogue-pool-info-card">
+                  <div class="d-flex align-items-center mb-2">
+                    <i class="bi bi-chat-heart text-success me-2"></i>
+                    <strong class="text-success">智能對話池模式</strong>
+                  </div>
+                  <p class="small text-muted mb-0">
+                    • 角色會根據話題興趣和個性決定是否發言<br>
+                    • 無需固定順序，對話更自然流暢<br>
+                    • 避免強制發言，讓討論更有機地發展
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- 對話顯示區域 -->
+        <div class="row">
+          <div class="col-12">
+            <div class="card bg-dark" style="max-height: 450px;">
+              <div class="card-body">
+                <h6 class="card-title mb-3">
+                  <i class="bi bi-chat-square-text"></i> 群組對話內容
+                </h6>
+                <div id="group-dialogue-container">
+                  <div class="text-center text-muted">
+                    <i class="bi bi-chat-square-dots"></i>
+                    <p class="mt-2">選擇角色並點擊「開始群組對話」來開始...</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="modal-footer">
+        <div id="group-dialogue-loading-spinner" class="text-center" style="display:none;">
+          <div class="spinner-border spinner-border-sm text-success" role="status"></div>
+          <span class="text-success ms-2">群組對話生成中...</span>
+        </div>
+        <button type="button" class="btn btn-success" id="start-group-dialogue-btn">
+          <i class="bi bi-play-circle"></i> 開始群組對話
+        </button>
+        <button type="button" class="btn btn-warning" id="clear-group-dialogue-btn" style="display: none;">
+          <i class="bi bi-arrow-clockwise"></i> 清除對話
+        </button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">關閉</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Bootstrap & Icons -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
@@ -254,6 +550,11 @@ let chatHistory = [];
 let selectedPersona1 = null;
 let selectedPersona2 = null;
 let dialogueSessionId = null;
+
+// 群組對話相關變數
+let selectedGroupPersonas = [];
+let groupDialogueSessionId = null;
+// 發言順序相關代碼已移除，現在使用動態對話池模式
 
 
 // Add this event handler in the setupChatForm function or in window.onload
@@ -616,6 +917,283 @@ function setupPersonaDialogue() {
   document.getElementById('start-dialogue-btn').addEventListener('click', startPersonaDialogue);
 }
 
+function setupGroupDialogue() {
+  // 設置打開群組對話模態框的按鈕
+  document.getElementById('open-group-dialogue-modal-btn').addEventListener('click', () => {
+    const modal = new bootstrap.Modal(document.getElementById('group-dialogue-modal'));
+    modal.show();
+    renderGroupPersonaSelector();
+    resetGroupDialogue();
+  });
+
+  // 設置開始群組對話按鈕
+  document.getElementById('start-group-dialogue-btn').addEventListener('click', startGroupDialogue);
+
+  // 設置清除對話按鈕
+  document.getElementById('clear-group-dialogue-btn').addEventListener('click', clearGroupDialogue);
+
+  // 設置發言順序選項變更
+  // 發言順序選項已移除，現在使用動態對話池模式
+}
+
+async function renderGroupPersonaSelector() {
+  const humanoids = await fetchHumanoids();
+  const selector = document.getElementById('group-persona-selector');
+  
+  // 清空選擇器
+  selector.innerHTML = '';
+  
+  // 為每個角色添加卡片
+  humanoids.forEach(h => {
+    const card = createGroupPersonaSelectorCard(h);
+    selector.appendChild(card);
+  });
+}
+
+function createGroupPersonaSelectorCard(humanoid) {
+  const card = document.createElement('div');
+  card.className = 'card humanoid-card mb-2 persona-selector-card';
+  card.dataset.id = humanoid.id;
+  card.innerHTML = `
+    <div class="card-body">
+      <div class="row">
+        <div class="col-3">
+          <img src="${apiBase}/image/${humanoid.id}" class="img-fluid rounded-circle" alt="${humanoid.name}" 
+               onerror="this.src='https://via.placeholder.com/60?text=無圖片'">
+        </div>
+        <div class="col-9">
+          <h6 class="card-title">${humanoid.name}</h6>
+          <p class="card-text text-secondary"><small>ID: ${humanoid.id}</small></p>
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="group-persona-${humanoid.id}" 
+                   onchange="toggleGroupPersonaSelection('${humanoid.id}', '${humanoid.name}', this.checked)">
+            <label class="form-check-label" for="group-persona-${humanoid.id}">
+              選擇此角色
+            </label>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  return card;
+}
+
+function toggleGroupPersonaSelection(personaId, personaName, isSelected) {
+  const persona = { id: personaId, name: personaName };
+  
+  if (isSelected) {
+    // 檢查是否已達到最大人數
+    if (selectedGroupPersonas.length >= 10) {
+      showToast('最多只能選擇10個角色', 'warning');
+      document.getElementById(`group-persona-${personaId}`).checked = false;
+      return;
+    }
+    
+    // 添加到選中列表
+    if (!selectedGroupPersonas.find(p => p.id === personaId)) {
+      selectedGroupPersonas.push(persona);
+    }
+  } else {
+    // 從選中列表移除
+    selectedGroupPersonas = selectedGroupPersonas.filter(p => p.id !== personaId);
+  }
+  
+  updateSelectedPersonasDisplay();
+  updateGroupSelector();
+}
+
+function updateSelectedPersonasDisplay() {
+  const display = document.getElementById('selected-personas-display');
+  
+  if (selectedGroupPersonas.length === 0) {
+    display.innerHTML = '<small class="text-muted">請從下方選擇角色...</small>';
+    return;
+  }
+  
+  let html = '';
+  selectedGroupPersonas.forEach(persona => {
+    html += `
+      <span class="selected-persona-badge" onclick="removeGroupPersona('${persona.id}')">
+        ${persona.name}
+        <span class="remove-btn">×</span>
+      </span>
+    `;
+  });
+  
+  display.innerHTML = html;
+}
+
+function removeGroupPersona(personaId) {
+  selectedGroupPersonas = selectedGroupPersonas.filter(p => p.id !== personaId);
+  document.getElementById(`group-persona-${personaId}`).checked = false;
+  updateSelectedPersonasDisplay();
+  updateGroupSelector();
+}
+
+function updateGroupSelector() {
+  const selector = document.getElementById('group-persona-selector');
+  const hasSelections = selectedGroupPersonas.length > 0;
+  
+  if (hasSelections) {
+    selector.classList.add('has-selections');
+  } else {
+    selector.classList.remove('has-selections');
+  }
+}
+
+// 發言順序相關函數已移除，現在使用動態對話池模式
+
+function resetGroupDialogue() {
+  selectedGroupPersonas = [];
+  groupDialogueSessionId = null;
+  
+  // 重置所有選項
+  document.getElementById('group-initial-topic').value = '大家好，很高興認識各位';
+  document.getElementById('group-num-rounds').value = '5';
+  
+  // 重置顯示
+  updateSelectedPersonasDisplay();
+  updateGroupSelector();
+  
+  // 重置對話容器
+  document.getElementById('group-dialogue-container').innerHTML = `
+    <div class="text-center text-muted">
+      <i class="bi bi-chat-square-dots"></i>
+      <p class="mt-2">選擇角色並點擊「開始群組對話」來開始...</p>
+    </div>
+  `;
+  
+  // 重置按鈕狀態
+  document.getElementById('clear-group-dialogue-btn').style.display = 'none';
+  
+  // 重置所有選框
+  document.querySelectorAll('#group-persona-selector input[type="checkbox"]').forEach(checkbox => {
+    checkbox.checked = false;
+  });
+}
+
+async function startGroupDialogue() {
+  if (selectedGroupPersonas.length < 2) {
+    showToast('請至少選擇2個角色進行群組對話', 'warning');
+    return;
+  }
+  
+  if (selectedGroupPersonas.length > 10) {
+    showToast('最多只能選擇10個角色', 'warning');
+    return;
+  }
+  
+  const initialTopic = document.getElementById('group-initial-topic').value.trim();
+  const numRounds = parseInt(document.getElementById('group-num-rounds').value);
+  
+  if (!initialTopic) {
+    showToast('請輸入初始對話主題', 'warning');
+    return;
+  }
+  
+  // 顯示載入動畫
+  document.getElementById('group-dialogue-loading-spinner').style.display = '';
+  document.getElementById('group-dialogue-container').innerHTML = '';
+  
+  try {
+    const personaIds = selectedGroupPersonas.map(p => p.id);
+    
+    const response = await fetch(`${apiBase}/group-dialogue`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        persona_ids: personaIds,
+        num_rounds: numRounds,
+        initial_topic: initialTopic,
+        session_id: groupDialogueSessionId
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.detail || '群組對話生成失敗');
+    }
+    
+    const data = await response.json();
+    groupDialogueSessionId = data.session_id;
+    
+    // 渲染群組對話內容
+    renderGroupDialogueContent(data.dialogue_rounds);
+    
+    // 顯示清除按鈕
+    document.getElementById('clear-group-dialogue-btn').style.display = 'inline-block';
+    
+    showToast('群組對話生成成功！', 'success');
+    
+  } catch (error) {
+    console.error('Group dialogue error:', error);
+    showToast(error.message || '群組對話生成失敗，請重試', 'danger');
+    
+    // 顯示錯誤訊息
+    document.getElementById('group-dialogue-container').innerHTML = `
+      <div class="text-center text-danger">
+        <i class="bi bi-exclamation-triangle"></i>
+        <p class="mt-2">${error.message || '發生錯誤，請重試'}</p>
+      </div>
+    `;
+  } finally {
+    document.getElementById('group-dialogue-loading-spinner').style.display = 'none';
+  }
+}
+
+function renderGroupDialogueContent(dialogueRounds) {
+  const container = document.getElementById('group-dialogue-container');
+  container.innerHTML = '';
+  
+  dialogueRounds.forEach(round => {
+    const bubbleDiv = document.createElement('div');
+    bubbleDiv.className = 'group-dialogue-bubble';
+    
+    bubbleDiv.innerHTML = `
+      <div class="d-flex align-items-start">
+        <img src="${apiBase}/image/${round.speaker_id}" class="speaker-avatar me-3" 
+             alt="${round.speaker}" onerror="this.src='https://via.placeholder.com/40?text=${round.speaker}'">
+        <div class="flex-grow-1">
+          <div class="speaker-name">${round.speaker}</div>
+          <div class="group-dialogue-content">
+            ${round.content}
+          </div>
+          <small class="text-muted">第 ${round.round} 輪</small>
+        </div>
+      </div>
+    `;
+    
+    container.appendChild(bubbleDiv);
+  });
+  
+  container.scrollTop = container.scrollHeight;
+}
+
+async function clearGroupDialogue() {
+  if (groupDialogueSessionId) {
+    try {
+      await fetch(`${apiBase}/group-dialogue/${groupDialogueSessionId}`, {
+        method: 'DELETE'
+      });
+      showToast('群組對話歷史已清除', 'info');
+    } catch (error) {
+      console.error('Failed to clear group dialogue:', error);
+    }
+  }
+  
+  // 重置對話容器但保持角色選擇
+  document.getElementById('group-dialogue-container').innerHTML = `
+    <div class="text-center text-muted">
+      <i class="bi bi-chat-square-dots"></i>
+      <p class="mt-2">點擊「開始群組對話」來重新開始...</p>
+    </div>
+  `;
+  
+  groupDialogueSessionId = null;
+  document.getElementById('clear-group-dialogue-btn').style.display = 'none';
+}
+
 async function renderPersonaSelectors() {
   const humanoids = await fetchHumanoids();
   const selector1 = document.getElementById('persona1-selector');
@@ -761,6 +1339,7 @@ window.onload = async () => {
   renderHumanoidList(humanoids);
   setupChatForm();
   setupPersonaDialogue();
+  setupGroupDialogue();
 }
 </script>
 </body>

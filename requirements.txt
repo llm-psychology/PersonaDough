@@ -8,3 +8,5 @@ deprecated
 pillow
 aiohttp
 fastapi
+flask
+flask-cors
