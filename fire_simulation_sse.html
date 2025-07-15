@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>火災現場模擬系統 (SSE版本)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: #f5f5f5;
+            height: 100vh;
+            display: grid;
+            grid-template-areas: 
+                "header header header"
+                "map status controls"
+                "logs logs logs";
+            grid-template-rows: 60px 1fr 300px;
+            grid-template-columns: 2fr 1fr 1fr;
+            gap: 10px;
+            padding: 10px;
+        }
+
+        .header {
+            grid-area: header;
+            background: #2c3e50;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            border-radius: 8px;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #e74c3c;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.connected {
+            background: #27ae60;
+            animation: none;
+        }
+
+        .status-indicator.connecting {
+            background: #f39c12;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .map-container {
+            grid-area: map;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .status-panel {
+            grid-area: status;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow-y: auto;
+        }
+
+        .controls-panel {
+            grid-area: controls;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .logs-panel {
+            grid-area: logs;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow-y: auto;
+        }
+
+        /* 地圖樣式 */
+        .floor-plan {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 10px;
+            height: 400px;
+            border: 2px solid #34495e;
+            padding: 10px;
+            background: #ecf0f1;
+        }
+
+        .room {
+            border: 2px solid #34495e;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            background: #2ecc71;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            padding: 5px;
+        }
+
+        .room.smoke { 
+            background: #95a5a6; 
+            border-color: #7f8c8d;
+        }
+        
+        .room.fire { 
+            background: #e74c3c; 
+            border-color: #c0392b;
+            animation: fireFlicker 0.5s infinite alternate;
+        }
+        
+        .room.exit { 
+            background: #3498db; 
+            border-color: #2980b9;
+        }
+
+        @keyframes fireFlicker {
+            0% { background: #e74c3c; }
+            100% { background: #c0392b; }
+        }
+
+        .room-label {
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 1px rgba(0,0,0,0.5);
+            margin-bottom: 5px;
+        }
+
+        .agents-in-room {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 2px;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .agent-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #fff;
+            border: 2px solid #2c3e50;
+            font-size: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #2c3e50;
+            position: relative;
+        }
+
+        .agent-dot.panicked {
+            border-color: #e74c3c;
+            background: #ffecec;
+            animation: shake 0.3s infinite;
+        }
+
+        .agent-dot.injured {
+            border-color: #f39c12;
+            background: #fff3cd;
+        }
+
+        .agent-dot.escaped {
+            border-color: #27ae60;
+            background: #d4edda;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-1px); }
+            75% { transform: translateX(1px); }
+        }
+
+        /* 控制面板樣式 */
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        .control-group h3 {
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        .input-group {
+            margin-bottom: 10px;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #34495e;
+        }
+
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #229954;
+        }
+
+        .btn-warning {
+            background: #f39c12;
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #e67e22;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        .btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        /* 狀態面板樣式 */
+        .agent-status {
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #f8f9fa;
+        }
+
+        .agent-name {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .agent-info {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-bottom: 3px;
+        }
+
+        .agent-action {
+            font-size: 11px;
+            color: #34495e;
+            font-style: italic;
+            background: #e8f4f8;
+            padding: 3px 6px;
+            border-radius: 3px;
+            margin-top: 5px;
+        }
+
+        /* 日誌樣式 */
+        .log-entry {
+            margin-bottom: 8px;
+            padding: 8px;
+            border-left: 3px solid #3498db;
+            background: #f8f9fa;
+            font-size: 13px;
+        }
+
+        .log-entry.system {
+            border-left-color: #27ae60;
+        }
+
+        .log-entry.event {
+            border-left-color: #f39c12;
+        }
+
+        .log-entry.error {
+            border-left-color: #e74c3c;
+            background: #fdf2f2;
+        }
+
+        .log-timestamp {
+            color: #7f8c8d;
+            font-size: 11px;
+            margin-right: 10px;
+        }
+
+        .simulation-info {
+            background: #e8f4f8;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        .simulation-info h3 {
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #34495e;
+        }
+
+        .info-value {
+            color: #2c3e50;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🔥 火災現場模擬系統 (SSE版本)</h1>
+        <div class="connection-status">
+            <div class="status-indicator" id="connectionIndicator"></div>
+            <span id="connectionStatus">未連接</span>
+        </div>
+    </div>
+
+    <div class="map-container">
+        <h2>建築平面圖</h2>
+        <div class="floor-plan" id="floorPlan">
+            <!-- 房間將通過JavaScript動態生成 -->
+        </div>
+    </div>
+
+    <div class="status-panel">
+        <h2>代理人狀態</h2>
+        <div id="agentStatusList">
+            <!-- 代理人狀態將通過JavaScript動態生成 -->
+        </div>
+    </div>
+
+    <div class="controls-panel">
+        <div class="control-group">
+            <h3>模擬設定</h3>
+            <div class="input-group">
+                <label for="numAgents">代理人數量:</label>
+                <input type="number" id="numAgents" min="1" max="20" value="8">
+            </div>
+            <div class="input-group">
+                <label for="fireRoom">起火房間:</label>
+                <select id="fireRoom">
+                    <option value="A1">房間 A1</option>
+                    <option value="A2">房間 A2</option>
+                    <option value="A3">房間 A3</option>
+                    <option value="B1">房間 B1</option>
+                    <option value="B2">房間 B2</option>
+                    <option value="B3">房間 B3</option>
+                    <option value="C1">房間 C1</option>
+                    <option value="C2">房間 C2</option>
+                </select>
+            </div>
+            <button class="btn btn-primary" onclick="startSimulation()">開始模擬</button>
+        </div>
+
+        <div class="control-group">
+            <h3>模擬控制</h3>
+            <button class="btn btn-warning" id="pauseBtn" onclick="pauseSimulation()" disabled>暫停</button>
+            <button class="btn btn-success" id="resumeBtn" onclick="resumeSimulation()" disabled>繼續</button>
+            <button class="btn btn-danger" id="stopBtn" onclick="stopSimulation()" disabled>停止</button>
+        </div>
+
+        <div class="simulation-info" id="simulationInfo" style="display: none;">
+            <h3>模擬資訊</h3>
+            <div class="info-item">
+                <span class="info-label">模擬ID:</span>
+                <span class="info-value" id="simId">-</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">當前Tick:</span>
+                <span class="info-value" id="currentTick">0</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">狀態:</span>
+                <span class="info-value" id="simStatus">-</span>
+            </div>
+            <div class="info-item">
+                <span class="info-label">SSE連接:</span>
+                <span class="info-value" id="sseStatus">未連接</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="logs-panel">
+        <h2>事件日誌</h2>
+        <div id="eventLogs">
+            <!-- 事件日誌將通過JavaScript動態生成 -->
+        </div>
+    </div>
+
+    <script>
+        // 全域變數
+        let simulationId = null;
+        let simulationRunning = false;
+        let eventSource = null;
+        let reconnectAttempts = 0;
+        let maxReconnectAttempts = 5;
+        let reconnectDelay = 2000; // 2秒
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('火災模擬系統初始化 (SSE版本)');
+            initializeFloorPlan();
+            addLogEntry('系統初始化完成', 'system');
+        });
+
+        // 初始化平面圖
+        function initializeFloorPlan() {
+            const floorPlan = document.getElementById('floorPlan');
+            const rooms = [
+                'A1', 'A2', 'A3', 'A4',
+                'B1', 'B2', 'B3', 'B4', 
+                'C1', 'C2', 'C3', 'C4'
+            ];
+
+            rooms.forEach(roomId => {
+                const roomElement = document.createElement('div');
+                roomElement.className = 'room';
+                roomElement.id = `room-${roomId}`;
+                roomElement.innerHTML = `
+                    <div class="room-label">${roomId}</div>
+                    <div class="agents-in-room" id="agents-${roomId}"></div>
+                `;
+                
+                // 設定出口房間
+                if (['A4', 'C4'].includes(roomId)) {
+                    roomElement.classList.add('exit');
+                }
+                
+                floorPlan.appendChild(roomElement);
+            });
+
+            console.log('平面圖初始化完成');
+        }
+
+        // 開始模擬
+        async function startSimulation() {
+            const numAgents = document.getElementById('numAgents').value;
+            const fireRoom = document.getElementById('fireRoom').value;
+
+            try {
+                addLogEntry(`準備開始模擬 - 代理人數: ${numAgents}, 起火房間: ${fireRoom}`, 'system');
+                
+                const response = await fetch('/start-fire-simulation', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        num_agents: parseInt(numAgents),
+                        max_rounds: 15,
+                        simulation_speed: 1.0
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                simulationId = data.simulation_id;
+                simulationRunning = true;
+
+                // 更新UI
+                updateSimulationInfo();
+                updateControlButtons();
+                
+                addLogEntry(`模擬已開始 - ID: ${simulationId}`, 'system');
+                
+                // 開始SSE連接
+                startSSEConnection();
+
+            } catch (error) {
+                console.error('開始模擬失敗:', error);
+                addLogEntry(`開始模擬失敗: ${error.message}`, 'error');
+            }
+        }
+
+        // 開始SSE連接
+        function startSSEConnection() {
+            if (!simulationId) {
+                addLogEntry('無效的模擬ID，無法建立SSE連接', 'error');
+                return;
+            }
+
+            // 關閉現有連接
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+
+            updateConnectionStatus('connecting');
+            addLogEntry(`建立SSE連接到模擬 ${simulationId}...`, 'system');
+
+            try {
+                const sseUrl = `/simulation-stream/${simulationId}`;
+                console.log('建立EventSource連接:', sseUrl);
+                
+                eventSource = new EventSource(sseUrl);
+
+                // 連接打開事件
+                eventSource.onopen = function(event) {
+                    console.log('EventSource連接已打開:', event);
+                    updateConnectionStatus('connected');
+                    reconnectAttempts = 0;
+                    reconnectDelay = 2000; // 重置延遲
+                    addLogEntry('SSE連接建立成功', 'system');
+                };
+
+                // 連接成功確認事件
+                eventSource.addEventListener('connected', function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('SSE連接確認:', data);
+                        addLogEntry(`SSE連接確認: ${data.message} (${data.connection_id})`, 'system');
+                    } catch (error) {
+                        console.error('解析連接確認資料失敗:', error);
+                    }
+                });
+
+                // 模擬更新事件
+                eventSource.addEventListener('simulation_update', function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('收到模擬更新 tick:', data.tick);
+                        updateSimulationState(data);
+                    } catch (error) {
+                        console.error('解析模擬資料失敗:', error);
+                        addLogEntry(`解析模擬資料失敗: ${error.message}`, 'error');
+                    }
+                });
+
+                // 模擬結束事件
+                eventSource.addEventListener('simulation_ended', function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('模擬結束事件:', data);
+                        addLogEntry('收到模擬結束信號', 'system');
+                        
+                        simulationRunning = false;
+                        updateControlButtons();
+                        updateConnectionStatus('disconnected');
+                        
+                        if (eventSource) {
+                            eventSource.close();
+                            eventSource = null;
+                        }
+                    } catch (error) {
+                        console.error('處理模擬結束事件失敗:', error);
+                    }
+                });
+
+                // 錯誤事件
+                eventSource.addEventListener('error', function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.error('SSE錯誤事件:', data);
+                        addLogEntry(`SSE錯誤: ${data.error}`, 'error');
+                    } catch (error) {
+                        console.error('解析SSE錯誤事件失敗:', error);
+                    }
+                });
+
+                // 通用錯誤處理
+                eventSource.onerror = function(event) {
+                    console.error('EventSource一般錯誤:', event);
+                    console.log('EventSource readyState:', eventSource.readyState);
+                    
+                    updateConnectionStatus('disconnected');
+                    
+                    // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSED
+                    if (eventSource.readyState === EventSource.CLOSED) {
+                        console.log('EventSource連接已關閉');
+                        
+                        if (simulationRunning && reconnectAttempts < maxReconnectAttempts) {
+                            reconnectAttempts++;
+                            const delaySeconds = reconnectDelay / 1000;
+                            addLogEntry(`SSE連接中斷，${delaySeconds}秒後重試 (${reconnectAttempts}/${maxReconnectAttempts})`, 'error');
+                            
+                            setTimeout(() => {
+                                if (simulationRunning) {
+                                    startSSEConnection();
+                                }
+                            }, reconnectDelay);
+                            
+                            // 指數退避
+                            reconnectDelay = Math.min(reconnectDelay * 1.5, 10000);
+                        } else if (simulationRunning) {
+                            addLogEntry('SSE連接失敗，已達最大重試次數', 'error');
+                            simulationRunning = false;
+                            updateControlButtons();
+                        }
+                    }
+                };
+
+                // 接收所有訊息的備用處理器
+                eventSource.onmessage = function(event) {
+                    console.log('收到一般SSE訊息:', event.data);
+                };
+
+            } catch (error) {
+                console.error('建立SSE連接失敗:', error);
+                addLogEntry(`建立SSE連接失敗: ${error.message}`, 'error');
+                updateConnectionStatus('disconnected');
+            }
+        }
+
+        // 更新連接狀態
+        function updateConnectionStatus(status) {
+            const indicator = document.getElementById('connectionIndicator');
+            const statusText = document.getElementById('connectionStatus');
+            const sseStatus = document.getElementById('sseStatus');
+
+            indicator.className = 'status-indicator';
+            
+            switch(status) {
+                case 'connected':
+                    indicator.classList.add('connected');
+                    statusText.textContent = '已連接';
+                    if (sseStatus) sseStatus.textContent = '已連接';
+                    break;
+                case 'connecting':
+                    indicator.classList.add('connecting');
+                    statusText.textContent = '連接中...';
+                    if (sseStatus) sseStatus.textContent = '連接中...';
+                    break;
+                case 'disconnected':
+                default:
+                    statusText.textContent = '未連接';
+                    if (sseStatus) sseStatus.textContent = '未連接';
+                    break;
+            }
+        }
+
+        // 更新模擬狀態
+        function updateSimulationState(data) {
+            if (!data) return;
+
+            // 更新基本資訊
+            document.getElementById('currentTick').textContent = data.tick || 0;
+            document.getElementById('simStatus').textContent = data.status || '未知';
+
+            // 更新地圖
+            updateFloorPlan(data.rooms || {}, data.agents || []);
+            
+            // 更新代理人狀態
+            updateAgentStatus(data.agents || []);
+            
+            // 處理事件
+            if (data.events && data.events.length > 0) {
+                data.events.forEach(event => {
+                    addLogEntry(event, 'event');
+                });
+            }
+
+            // 檢查模擬是否結束
+            if (data.finished) {
+                simulationRunning = false;
+                updateControlButtons();
+                if (data.stats) {
+                    showFinalStats(data.stats);
+                }
+            }
+        }
+
+        // 更新平面圖
+        function updateFloorPlan(rooms, agents) {
+            // 重置所有房間
+            document.querySelectorAll('.room').forEach(room => {
+                room.className = 'room';
+                const roomId = room.id.replace('room-', '');
+                if (['A4', 'C4'].includes(roomId)) {
+                    room.classList.add('exit');
+                }
+            });
+
+            // 更新房間狀態
+            Object.keys(rooms).forEach(roomId => {
+                const roomElement = document.getElementById(`room-${roomId}`);
+                const roomData = rooms[roomId];
+                
+                if (roomElement && roomData) {
+                    if (roomData.fire_level > 0) {
+                        roomElement.classList.add('fire');
+                    }
+                    if (roomData.smoke_level > 0) {
+                        roomElement.classList.add('smoke');
+                    }
+                }
+            });
+
+            // 清空所有房間的代理人
+            document.querySelectorAll('.agents-in-room').forEach(container => {
+                container.innerHTML = '';
+            });
+
+            // 添加代理人到相應房間
+            agents.forEach(agent => {
+                const agentContainer = document.getElementById(`agents-${agent.current_room}`);
+                if (agentContainer) {
+                    const agentDot = document.createElement('div');
+                    agentDot.className = 'agent-dot';
+                    agentDot.textContent = agent.id;
+                    agentDot.title = `${agent.name} - 健康: ${agent.health}% - 恐慌: ${agent.panic_level}%`;
+                    
+                    if (agent.panic_level > 70) {
+                        agentDot.classList.add('panicked');
+                    }
+                    if (agent.health < 80) {
+                        agentDot.classList.add('injured');
+                    }
+                    if (agent.status === 'escaped') {
+                        agentDot.classList.add('escaped');
+                    }
+                    
+                    agentContainer.appendChild(agentDot);
+                }
+            });
+        }
+
+        // 更新代理人狀態面板
+        function updateAgentStatus(agents) {
+            const statusList = document.getElementById('agentStatusList');
+            statusList.innerHTML = '';
+
+            agents.forEach(agent => {
+                const statusElement = document.createElement('div');
+                statusElement.className = 'agent-status';
+                statusElement.innerHTML = `
+                    <div class="agent-name">${agent.name} (${agent.id})</div>
+                    <div class="agent-info">位置: ${agent.current_room}</div>
+                    <div class="agent-info">健康: ${agent.health}%</div>
+                    <div class="agent-info">恐慌: ${agent.panic_level}%</div>
+                    <div class="agent-info">狀態: ${agent.status}</div>
+                    <div class="agent-action">${agent.current_action || '等待中...'}</div>
+                `;
+                statusList.appendChild(statusElement);
+            });
+        }
+
+        // 暫停模擬
+        async function pauseSimulation() {
+            if (!simulationId) return;
+
+            try {
+                await fetch(`/fire-simulation/${simulationId}/control?action=pause`, { method: 'POST' });
+                addLogEntry('模擬已暫停', 'system');
+            } catch (error) {
+                addLogEntry(`暫停模擬失敗: ${error.message}`, 'error');
+            }
+        }
+
+        // 繼續模擬
+        async function resumeSimulation() {
+            if (!simulationId) return;
+
+            try {
+                await fetch(`/fire-simulation/${simulationId}/control?action=resume`, { method: 'POST' });
+                addLogEntry('模擬已繼續', 'system');
+            } catch (error) {
+                addLogEntry(`繼續模擬失敗: ${error.message}`, 'error');
+            }
+        }
+
+        // 停止模擬
+        async function stopSimulation() {
+            if (!simulationId) return;
+
+            try {
+                await fetch(`/fire-simulation/${simulationId}/control?action=stop`, { method: 'POST' });
+                simulationRunning = false;
+                updateControlButtons();
+                
+                if (eventSource) {
+                    eventSource.close();
+                    eventSource = null;
+                }
+                
+                updateConnectionStatus('disconnected');
+                addLogEntry('模擬已停止', 'system');
+            } catch (error) {
+                addLogEntry(`停止模擬失敗: ${error.message}`, 'error');
+            }
+        }
+
+        // 更新控制按鈕狀態
+        function updateControlButtons() {
+            const pauseBtn = document.getElementById('pauseBtn');
+            const resumeBtn = document.getElementById('resumeBtn');
+            const stopBtn = document.getElementById('stopBtn');
+
+            if (simulationRunning) {
+                pauseBtn.disabled = false;
+                resumeBtn.disabled = false;
+                stopBtn.disabled = false;
+            } else {
+                pauseBtn.disabled = true;
+                resumeBtn.disabled = true;
+                stopBtn.disabled = true;
+            }
+        }
+
+        // 更新模擬資訊
+        function updateSimulationInfo() {
+            const infoPanel = document.getElementById('simulationInfo');
+            if (simulationId) {
+                document.getElementById('simId').textContent = simulationId;
+                infoPanel.style.display = 'block';
+            } else {
+                infoPanel.style.display = 'none';
+            }
+        }
+
+        // 添加日誌條目
+        function addLogEntry(message, type = 'info') {
+            const logsContainer = document.getElementById('eventLogs');
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            logEntry.innerHTML = `
+                <span class="log-timestamp">[${timestamp}]</span>
+                ${message}
+            `;
+            
+            logsContainer.appendChild(logEntry);
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+
+            // 限制日誌數量
+            while (logsContainer.children.length > 100) {
+                logsContainer.removeChild(logsContainer.firstChild);
+            }
+        }
+
+        // 顯示最終統計
+        function showFinalStats(stats) {
+            const message = `
+                模擬結束 - 
+                總代理人: ${stats.total_agents || 0}, 
+                逃生: ${stats.escaped_count || 0}, 
+                受傷: ${stats.injured_count || 0}, 
+                逃生率: ${((stats.escape_rate || 0) * 100).toFixed(1)}%
+            `;
+            addLogEntry(message, 'system');
+        }
+
+        // 頁面卸載時關閉連接
+        window.addEventListener('beforeunload', function() {
+            if (eventSource) {
+                eventSource.close();
+            }
+        });
+    </script>
+</body>
+</html> 

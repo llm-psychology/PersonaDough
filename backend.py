@@ -65,6 +65,15 @@ character_generator = CharacterGenerator() # Initialize character generator
 CONVERSATION_HISTORY_PATH = "conversation_history"
 os.makedirs(CONVERSATION_HISTORY_PATH, exist_ok=True)
 
+# New: 火災模擬相關導入和初始化
+from scenario_simulator import FireScenarioSimulator
+import asyncio
+from fastapi.responses import StreamingResponse
+from sse_starlette.sse import EventSourceResponse
+
+# 全域火災模擬管理器
+active_simulations = {}
+
 # =======================================================
 
 app = FastAPI(
@@ -87,6 +96,16 @@ app.add_middleware(
 @app.get("/")
 def serve_frontend():
     return FileResponse("frontend.html", media_type="text/html")
+
+# fire simulation
+@app.get("/fire_simulation")
+def serve_fire_simulation():
+    return FileResponse("fire_simulation.html", media_type="text/html")
+
+# fire simulation
+@app.get("/fire_simulation_sse")
+def serve_fire_simulation_sse():
+    return FileResponse("fire_simulation_sse.html", media_type="text/html")
 
 # =======================================================
 
@@ -230,21 +249,16 @@ class GroupDialogueManager:
             {
                 "role": "system",
                 "content": f"""你是一個根據以下記憶資料模擬出來的人格：{persona_data['簡化行為']}
-                
                 你正在參與一個群組對話，其他參與者包括：{participants_info}
-                
                 記憶資料：
                 {"\n".join(retrieved_docs) if retrieved_docs else "（無可參考的記憶資料）"}
-                
                 {conversation_context}
-                
                 {group_instruction}
-                
+                請根據上下文判斷是否需要自我介紹，除非是初次見面或需要自我介紹的情境，否則請避免重複自我介紹或說「大家好，我是OOO，請多多指教」這類話。
                 根據這些資料，用一致的口吻、用字遣詞、邏輯、口語化、對話模式來回答。你現在就是這個人，當有人問你是誰的時候，不能說你是AI助手，你要說出角色的名字。
                 需要仔細衡量人格的背景，年齡和人生經歷須符合，回答的內容講求台灣的真實歷史性，不要產生不一致或不合邏輯的資料。
                 仔細評估人格的語氣，情緒可以有點起伏，不要過度的正向，維持上下文的情緒。
                 回應要保持連貫性，記住前面的對話內容，讓整個對話流程自然。
-                在群組對話中，可以針對特定人的發言作回應，或是提出新的話題讓大家討論。
                 """
             },
             {"role": "user", "content": current_topic}
@@ -323,21 +337,17 @@ class GroupDialogueManager:
             {
                 "role": "system", 
                 "content": f"""你是一個根據以下記憶資料模擬出來的人格：{persona_data['簡化行為']}
-                
                 記憶資料：
                 {"\n".join(retrieved_docs) if retrieved_docs else "（無可參考的記憶資料）"}
-                
                 {conversation_context}
-                
                 現在請判斷：在這個群組對話中，根據你的個性和興趣，你是否想要對目前的話題發言？
-                
                 考慮因素：
                 1. 這個話題是否與你的興趣、專業或經歷相關？
                 2. 你是否有想要分享的觀點或經驗？
                 3. 根據你的個性，你在群組中是主動發言的類型還是比較被動？
                 4. 你是否想要回應其他人的觀點？
-                
                 請只回答「是」或「否」，不需要其他解釋。
+                請根據上下文判斷是否需要自我介紹，除非是初次見面或需要自我介紹的情境，否則請避免重複自我介紹或說「大家好，我是OOO，請多多指教」這類話。
                 """
             },
             {"role": "user", "content": f"目前的話題是：{current_topic}"}
@@ -544,12 +554,13 @@ async def create_interview(request: InterviewRequest):
         
         # Build enhanced prompt that includes conversation history
         prompt = []
-        system_content = f"""你是一個根據以下記憶資料模擬出來的人格：{persona_data['簡化行為']}\n
+        system_content = f"""你是一個根據以下記憶資料模擬出來的人格：{persona_data['簡化行為']}
         記憶資料：
         {"\n".join(retrieved) if retrieved else "（無可參考的記憶資料）"}
         
         {conversation_context if conversation_context else ""}
         
+        請根據上下文判斷是否需要自我介紹，除非是初次見面或需要自我介紹的情境，否則請避免重複自我介紹或說「大家好，我是OOO，請多多指教」這類話。
         根據這些資料，用一致的口吻、用字遣詞、邏輯、口語化、對話模式來回答問題。你現在就是這個人，當有人問你是誰的時候，不能說你是AI助手，你要說出角色的名字。
         需要仔細衡量人格的背景，年齡和人生經歷須符合，回答的內容講求台灣的真實歷史性，不要產生不一致或不合邏輯的資料。
         仔細評估人格的語氣，情緒可以有點起伏，不要過度的正向，維持上下文的情緒。如果沒有上下文就維持平平的，無需過度開心或是憤怒。
@@ -859,6 +870,338 @@ async def clear_group_dialogue_history(session_id: str):
         os.remove(history_file)
         return {"success": True, "message": f"群組對話歷史記錄 {session_id} 已清除"}
     raise HTTPException(status_code=404, detail=f"會話 {session_id} 不存在")
+
+# =======================================================
+# 火災模擬 API 端點
+# =======================================================
+
+class FireSimulationRequest(BaseModel):
+    num_agents: int = 5
+    max_rounds: int = 15
+    simulation_speed: Optional[float] = 1.0
+
+class FireSimulationResponse(BaseModel):
+    simulation_id: str
+    status: str
+    message: str
+
+@app.get("/fire-simulation")
+async def serve_fire_simulation_ui():
+    """提供火災模擬 UI 頁面 (Polling版本)"""
+    return FileResponse("templates/fire_simulation.html", media_type="text/html")
+
+@app.get("/fire-simulation-sse")
+async def serve_fire_simulation_sse_ui():
+    """提供火災模擬 UI 頁面 (SSE版本)"""
+    return FileResponse("fire_simulation_sse.html", media_type="text/html")
+
+@app.post("/start-fire-simulation", response_model=FireSimulationResponse)
+async def start_fire_simulation(request: FireSimulationRequest):
+    """啟動火災模擬"""
+    try:
+        # 創建新的模擬器
+        simulator = FireScenarioSimulator()
+        await simulator.initialize()
+        
+        # 生成模擬 ID
+        simulation_id = f"fire_sim_{str(uuid.uuid4())[:8]}"
+        
+        # 儲存到活躍模擬中
+        active_simulations[simulation_id] = {
+            "simulator": simulator,
+            "status": "running",
+            "tick": 0,
+            "agents_data": [],
+            "rooms_data": {},
+            "events": [],
+            "finished": False
+        }
+        
+        # 在背景執行模擬
+        asyncio.create_task(run_fire_simulation_background(
+            simulation_id, 
+            simulator, 
+            request.num_agents, 
+            request.max_rounds,
+            request.simulation_speed or 1.0
+        ))
+        
+        return FireSimulationResponse(
+            simulation_id=simulation_id,
+            status="started",
+            message=f"火災模擬已啟動，ID: {simulation_id}"
+        )
+        
+    except Exception as e:
+        logger.error(f"啟動火災模擬失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"啟動模擬失敗: {str(e)}")
+
+async def run_fire_simulation_background(simulation_id: str, simulator: FireScenarioSimulator, 
+                                       num_agents: int, max_rounds: int, speed: float):
+    """在背景執行火災模擬"""
+    try:
+        sim_data = active_simulations[simulation_id]
+        
+        # 建立代理人
+        await simulator.create_agents_from_database(num_agents)
+        
+        # 開始模擬循環
+        for round_num in range(max_rounds):
+            if sim_data["status"] != "running":
+                break
+                
+            # 執行一個 tick
+            tick_events = await simulator.fire_scenario_tick()
+            
+            # 更新模擬資料
+            sim_data["tick"] = simulator.tick
+            sim_data["events"] = tick_events
+            sim_data["agents_data"] = [
+                {
+                    "id": agent.id,
+                    "name": agent.name,
+                    "current_room": agent.location,  # 前端期望的欄位名稱
+                    "location": agent.location,  # 保留原有欄位
+                    "health": agent.health,
+                    "panic_level": agent.panic_level,
+                    "escaped": agent.escaped,
+                    "injured": agent.injured,
+                    "status": "已逃生" if agent.escaped else ("受傷" if agent.injured else "危險中"),
+                    "current_action": getattr(agent, 'current_action', '等待中...'),
+                    "traits": agent.traits
+                }
+                for agent in simulator.agents
+            ]
+            sim_data["rooms_data"] = {
+                name: {
+                    "name": name,
+                    "on_fire": room.on_fire,
+                    "smoke": room.smoke,
+                    "temperature": room.temperature,
+                    "visibility": room.visibility,
+                    "is_exit": room.is_exit,
+                    "blocked": room.blocked
+                }
+                for name, room in simulator.rooms.items()
+            }
+            
+            # 檢查是否結束
+            active_agents = [a for a in simulator.agents if not a.escaped and not a.injured]
+            if not active_agents:
+                sim_data["finished"] = True
+                sim_data["status"] = "completed"
+                sim_data["events"] = ["所有代理人都已逃生或受傷，模擬結束"]
+                break
+                
+            # 控制模擬速度
+            await asyncio.sleep(speed)
+            
+        # 模擬結束
+        if sim_data["status"] == "running":
+            sim_data["status"] = "completed"
+            sim_data["finished"] = True
+            
+        # 計算最終統計
+        total_agents = len(simulator.agents)
+        escaped_count = sum(1 for a in simulator.agents if a.escaped)
+        injured_count = sum(1 for a in simulator.agents if a.injured)
+        
+        sim_data["final_stats"] = {
+            "total_agents": total_agents,
+            "escaped_count": escaped_count,
+            "injured_count": injured_count,
+            "escape_rate": escaped_count / total_agents if total_agents > 0 else 0,
+            "injury_rate": injured_count / total_agents if total_agents > 0 else 0,
+            "total_ticks": simulator.tick
+        }
+        
+        logger.info(f"火災模擬 {simulation_id} 完成")
+        
+    except Exception as e:
+        logger.error(f"火災模擬 {simulation_id} 執行失敗: {e}", exc_info=True)
+        sim_data["status"] = "error"
+        sim_data["error"] = str(e)
+
+@app.get("/simulation-stream/{simulation_id}")
+async def get_simulation_stream(simulation_id: str):
+    """提供模擬的實時串流資料"""
+    from fastapi.responses import StreamingResponse
+    
+    if simulation_id not in active_simulations:
+        raise HTTPException(status_code=404, detail="模擬不存在")
+    
+    async def event_generator():
+        connection_id = str(uuid.uuid4())[:8]
+        logger.info(f"新的SSE連接建立: {connection_id} for simulation {simulation_id}")
+        
+        try:
+            # 發送連接確認
+            connected_data = json.dumps({
+                'message': '連接成功', 
+                'simulation_id': simulation_id, 
+                'connection_id': connection_id
+            }, ensure_ascii=False)
+            yield f"event: connected\ndata: {connected_data}\n\n"
+            
+            last_tick = -1
+            last_events_count = 0
+            heartbeat_counter = 0
+            
+            while simulation_id in active_simulations:
+                try:
+                    sim_data = active_simulations[simulation_id]
+                    current_tick = sim_data.get("tick", 0)
+                    current_events = sim_data.get("events", [])
+                    current_status = sim_data.get("status", "unknown")
+                    
+                    # 檢查是否有更新需要發送
+                    has_update = (
+                        current_tick != last_tick or 
+                        len(current_events) > last_events_count or
+                        sim_data.get("finished", False)
+                    )
+                    
+                    if has_update:
+                        # 準備發送的資料
+                        new_events = current_events[last_events_count:] if len(current_events) > last_events_count else []
+                        
+                        update_data = {
+                            "tick": current_tick,
+                            "status": current_status,
+                            "agents": sim_data.get("agents_data", []),
+                            "rooms": sim_data.get("rooms_data", {}),
+                            "events": new_events,
+                            "finished": sim_data.get("finished", False)
+                        }
+                        
+                        if sim_data.get("finished", False):
+                            update_data["stats"] = sim_data.get("final_stats", {})
+                        
+                        # 發送更新
+                        update_json = json.dumps(update_data, ensure_ascii=False)
+                        yield f"event: simulation_update\ndata: {update_json}\n\n"
+                        
+                        logger.debug(f"SSE {connection_id} 發送更新: tick={current_tick}, events={len(new_events)}")
+                        
+                        last_tick = current_tick
+                        last_events_count = len(current_events)
+                        
+                        # 如果模擬結束
+                        if sim_data.get("finished", False):
+                            end_data = json.dumps({'message': '模擬結束'}, ensure_ascii=False)
+                            yield f"event: simulation_ended\ndata: {end_data}\n\n"
+                            logger.info(f"SSE連接 {connection_id} 模擬結束，正常關閉")
+                            break
+                    
+                    # 每10次循環發送一次心跳
+                    heartbeat_counter += 1
+                    if heartbeat_counter % 10 == 0:
+                        yield f": heartbeat-{connection_id}-{heartbeat_counter}\n\n"
+                    
+                except KeyError as ke:
+                    logger.warning(f"SSE {connection_id} 缺少資料鍵: {ke}")
+                except Exception as inner_e:
+                    logger.error(f"SSE內部循環錯誤 {connection_id}: {inner_e}")
+                
+                # 等待
+                await asyncio.sleep(0.5)
+                
+        except asyncio.CancelledError:
+            logger.info(f"SSE連接 {connection_id} 被客戶端取消")
+            return
+        except Exception as e:
+            logger.error(f"SSE嚴重錯誤 {connection_id}: {e}", exc_info=True)
+            try:
+                error_data = json.dumps({'error': str(e), 'connection_id': connection_id}, ensure_ascii=False)
+                yield f"event: error\ndata: {error_data}\n\n"
+            except:
+                pass
+        finally:
+            logger.info(f"SSE連接 {connection_id} 關閉")
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Methods": "*",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+@app.get("/fire-simulation/{simulation_id}/status")
+async def get_simulation_status(simulation_id: str):
+    """獲取模擬狀態"""
+    if simulation_id not in active_simulations:
+        raise HTTPException(status_code=404, detail="模擬不存在")
+    
+    sim_data = active_simulations[simulation_id]
+    
+    response = {
+        "simulation_id": simulation_id,
+        "status": sim_data["status"],
+        "tick": sim_data["tick"],
+        "finished": sim_data.get("finished", False),
+        "agents_data": sim_data.get("agents_data", []),
+        "rooms_data": sim_data.get("rooms_data", {}),
+        "events": sim_data.get("events", [])
+    }
+    
+    if sim_data.get("final_stats"):
+        response["final_stats"] = sim_data["final_stats"]
+    
+    if sim_data.get("error"):
+        response["error"] = sim_data["error"]
+    
+    return response
+
+@app.post("/fire-simulation/{simulation_id}/control")
+async def control_simulation(simulation_id: str, action: str = Query(...)):
+    """控制模擬（暫停、繼續、停止）"""
+    if simulation_id not in active_simulations:
+        raise HTTPException(status_code=404, detail="模擬不存在")
+    
+    sim_data = active_simulations[simulation_id]
+    
+    if action == "pause":
+        sim_data["status"] = "paused"
+    elif action == "resume":
+        sim_data["status"] = "running"
+    elif action == "stop":
+        sim_data["status"] = "stopped"
+    else:
+        raise HTTPException(status_code=400, detail="無效的控制動作")
+    
+    return {"message": f"模擬 {action} 成功"}
+
+@app.delete("/fire-simulation/{simulation_id}")
+async def delete_simulation(simulation_id: str):
+    """刪除模擬"""
+    if simulation_id not in active_simulations:
+        raise HTTPException(status_code=404, detail="模擬不存在")
+    
+    del active_simulations[simulation_id]
+    return {"message": "模擬已刪除"}
+
+@app.get("/fire-simulations")
+async def list_active_simulations():
+    """列出所有活躍的模擬"""
+    simulations = []
+    for sim_id, sim_data in active_simulations.items():
+        simulations.append({
+            "simulation_id": sim_id,
+            "status": sim_data["status"],
+            "tick": sim_data["tick"],
+            "finished": sim_data.get("finished", False),
+            "num_agents": len(sim_data["agents_data"])
+        })
+    
+    return {"simulations": simulations}
+
+# =======================================================
 
 # Start the server
 if __name__ == "__main__":

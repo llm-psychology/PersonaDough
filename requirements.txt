@@ -11,3 +11,4 @@ fastapi
 flask
 flask-cors
 uvicorn
+sse-starlette==1.6.5
