@@ -1,6 +1,5 @@
 # LLM_responder.py
 import os
-from tkinter import NO
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 from typing import List, Dict
@@ -8,8 +7,10 @@ import numpy as np
 from deprecated import deprecated
 import asyncio
 import time
-import requests
-from module.PHOTO_compress import download_and_convert_to_jpg_async
+import aiohttp
+from PIL import Image
+from io import BytesIO
+import os
 load_dotenv()
 
 # ======= CONFIG =======
@@ -49,7 +50,7 @@ class LLM_responder:
         except Exception as e:
             raise Exception(f"API 請求失敗: {str(e)}")
 
-    async def __call_images_openai_api(self, model, prompt: str, output_path: str, photo_size: str) -> None:
+    async def __call_images_openai_api(self, model, prompt: str, output_path: str, photo_size) -> None:
         """reification過的prompt轉圖片並下載
         https://platform.openai.com/docs/api-reference/images/create
         """
@@ -65,7 +66,7 @@ class LLM_responder:
         if not image_url:
             raise Exception("圖片 URL 為空，無法下載圖片")
         try:
-            await download_and_convert_to_jpg_async(image_url, output_path)
+            await self.download_and_convert_to_jpg_async(image_url, output_path)
         except Exception as e:
             print(f"下載並轉換圖片時發生錯誤:{e}")
 
@@ -79,17 +80,7 @@ class LLM_responder:
     
     #================================================================================================================
 
-    @deprecated(reason="準備移除")
-    async def chat_gpt_4o(self, prompt: str, temperature: int)->str:
-        """簡單對話-使用 chat.completions API透過gpt-4o的user回答單輪對話"""
-        model = CHAT_MODEL_4O
-        prompt = [{"role": "user", "content": prompt}]
-        respond = await self.__call_completions_openai_api(model, prompt, temperature)
-        return respond.choices[0].message.content
-    
-    #================================================================================================================
-
-    async def full_chat_gpt_4o(self, sys_prompt: str="", usr_prompt: str="", temperature: int=0.7, top_p: int=1)->str:
+    async def full_chat_gpt_4o(self, sys_prompt: str="", usr_prompt: str="", temperature: float=0.7, top_p: int=1)->str:
         """使用 chat.completions API透過gpt-4o的自定義回答"單輪"對話
 
         usage: full_chat_gpt_4o("你是數學教學小助手，不可以誤人子弟亂回答，要教給五歲小孩聽的", "回答一個題目是: 1+1=多少?", 0.3)"""
@@ -101,7 +92,7 @@ class LLM_responder:
         respond = await self.__call_completions_openai_api(model, prompt, temperature, top_p)
         return respond.choices[0].message.content
         
-    async def full_chat_gpt_41(self, sys_prompt: str="", usr_prompt: str="", temperature: int=0.7, top_p: int=1)->str:
+    async def full_chat_gpt_41(self, sys_prompt: str="", usr_prompt: str="", temperature: float=0.7, top_p: int=1)->str:
         """gpt4.1比較會遵守格式
         使用 chat.completions API透過gpt-4.1的自定義回答"單輪"對話
 
@@ -115,7 +106,7 @@ class LLM_responder:
         respond = await self.__call_completions_openai_api(model, prompt, temperature, top_p)
         return respond.choices[0].message.content
     
-    async def full_chat_gpt_41_mini(self, sys_prompt: str="", usr_prompt: str="", temperature: int=0.9, top_p: int=1)->str:
+    async def full_chat_gpt_41_mini(self, sys_prompt: str="", usr_prompt: str="", temperature: float=0.9, top_p: int=1)->str:
         """gpt4.1mini 
         使用 chat.completions API透過gpt-4.1-mini的自定義回答"單輪"對話
 
@@ -127,9 +118,10 @@ class LLM_responder:
         ]
         top_p = 1
         respond = await self.__call_completions_openai_api(model, prompt, temperature, top_p)
-        return respond.choices[0].message.content
+        output = respond.choices[0].message.content
+        return output if output is not None else ""
     
-    async def full_chat_gpt_41_nano(self, sys_prompt: str="", usr_prompt: str="", temperature: int=0.9, top_p: int=1)->str:
+    async def full_chat_gpt_41_nano(self, sys_prompt: str="", usr_prompt: str="", temperature: float=0.9, top_p: int=1)->str:
         """gpt4.1nano 比較快比較不需要智商的
         使用 chat.completions API透過gpt-4.1-nano的自定義回答"單輪"對話
 
@@ -141,7 +133,8 @@ class LLM_responder:
         ]
         top_p = 1
         respond = await self.__call_completions_openai_api(model, prompt, temperature, top_p)
-        return respond.choices[0].message.content
+        output = respond.choices[0].message.content
+        return output if output is not None else ""
 
     #=================================================================================
 
@@ -181,7 +174,8 @@ class LLM_responder:
         model = CHAT_MODEL_4O
         prompt = chat_messages
         respond = await self.__call_completions_openai_api(model, prompt, 0.7)
-        return respond.choices[0].message.content.strip()
+        output = respond.choices[0].message.content.strip()
+        return output if output is not None else ""
 
 
     async def generate_embedding(self, docs: List[str], embedding_model: str = EMBEDDING_MODEL):
@@ -194,6 +188,25 @@ class LLM_responder:
         embeddings = await self.__call_embeddings_openai_api([text])
         return embeddings
 
+    async def download_and_convert_to_jpg_async(self, url: str, output_path: str, quality: int = 85):
+        # 確保資料夾存在
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+        # 使用 aiohttp 非同步下載
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                if resp.status != 200:
+                    raise Exception(f"圖片下載失敗，狀態碼：{resp.status}")
+                content = await resp.read()
+
+        # 使用 PIL 開啟並轉為 RGB，再轉 JPEG
+        image = Image.open(BytesIO(content))
+        if image.mode in ("RGBA", "P"):
+            image = image.convert("RGB")
+
+        # 儲存為 JPEG，含壓縮
+        image.save(output_path, format="JPEG", quality=quality)
+        print(f"已儲存壓縮 JPEG 至 {output_path}")
     #=================================================================================
 
 async def unit_test():
