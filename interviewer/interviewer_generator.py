@@ -53,13 +53,12 @@ class Interviewer(LLM_responder):
 
     # ========== 6. Build Simulation Prompt ==========
     def build_simulation_prompt(self, persona, retrieved_docs: List[str], user_query: str) -> List[Dict[str, str]]:
+        from module.prompt_loader import get_system_prompt
+        
         memory_context = "\n".join(retrieved_docs) if retrieved_docs else "（無可參考的記憶資料）"
-        system_prompt = f"""你是一個根據以下記憶資料模擬出來的人格：{persona['簡化行為']}
-{memory_context}
-請根據上下文判斷是否需要自我介紹，除非是初次見面或需要自我介紹的情境，否則請避免重複自我介紹或說「大家好，我是OOO，請多多指教」這類話。
-根據這些資料，用一致的口吻、用字遣詞、邏輯、口語化、對話模式來回答問題。你現在就是這個人，當有人問你是誰的時候，不能說你是AI助手，你要說出角色的名字。
-需要仔細衡量人格的背景，年齡和人生經歷須符合，回答的內容講求台灣的真實歷史性，不要產生不一致或不合邏輯的資料。當使用者問了記憶
-外的問題，需要注意這個人格會對於這件事情的熟悉度有多少，例如年輕人對於很久以前發生的事情可能就不會那麼熟悉，或是有一些老人對於近代時事梗可能不是那麼的理解。"""
+        system_prompt = get_system_prompt("build_simulation_prompt", 
+                                        simplified_behavior=persona['簡化行為'],
+                                        memory_context=memory_context)
         return [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_query}
@@ -152,39 +151,13 @@ class Interviewer(LLM_responder):
             
             # 如果有角色資料，使用角色自動回答
             if persona_data:
-                question_batch_prompt = """回答每一題訪談問題，並嚴格遵守輸出格式。
-
-                【輸入】：
-                1. 描述您童年最難忘的回憶。
-                2. 您認為哪些個人特質對您的成長影響最大？
-                3. 談談您在學生時代最具挑戰的一件事。
-
-                ---
-
-【輸出】：(不包含此行)
-[
-{
-"問題": "描述您童年最難忘的回憶。",
-"回答": "在我童年的記憶中，最難忘的莫過於在雲林鄉間田野裡的日子。父母經營著一片竹筍田，每到收成季節，我就會跟著父親一起下田。雖然一身泥濘，卻感受到一家人為生活齊心努力的溫暖。我還記得黃昏時分，母親會在田邊等著我們回家，那份簡單卻踏實的幸福至今仍令我懷念。這些經歷讓我體會到勤勞與家庭的重要，而純樸的鄉村環境，也塑造了我知足常樂的心態。"
-},
-{
-"問題": "您認為哪些個人特質對您的成長影響最大？",
-"回答": "我認為善於調適和進取精神對我的成長影響很大。從小家境並不優渥，生活中常常需要面對各種大大小小的困難。但我總是抱持著積極的態度快速適應不同情境，並勇於挑戰自己的極限。此外，由於性格偏內向，我學會了觀察與傾聽，也因此能在小團體裡發揮影響力。這種穩健而進取的特質，成為我日後無論在學業、職場還是家庭生活中最大的助力。"
-},
-{
-"問題": "您認為哪些個人特質對您的成長影響最大？",
-"回答": "在雲林高中的時候，我參加了模擬聯合國會議。對一個內向的學生而言，要在眾人面前表達想法與辯論非常不容易。但這卻讓我開始正視並突破自己的侷限。當時我花了很多時間準備，也花心思理解各國立場與利益，最終順利完成多場談判與協議。這段經驗不僅磨練了我的談判技巧，也讓我更有自信面對各種未知的挑戰，進而點燃了我對國際事務的熱情。"
-}
-]
-
-                ---
-
-                訪問題目是:
-                """
+                from module.prompt_loader import get_user_prompt
+                
+                question_batch_prompt = get_user_prompt("batch_interview_questions")
                 
                 # 將當前批次的問題加入 prompt
-                for question in batch_question_contents:
-                    question_batch_prompt += question + "\n"
+                questions_text = "\n".join(batch_question_contents)
+                question_batch_prompt += questions_text
                 
                 print("正在生成回答...")
 
@@ -244,8 +217,11 @@ class Interviewer(LLM_responder):
         qa_pairs = []
         current_context = ""
         # ==============================
-        sys_prompt = "你是一個專業的訪談者，根據以下訪談內容，產生一個深入的問題。問題應該要： 1. 基於受訪者的回答 2. 引導出更多個人故事或想法 3. 保持對話的連貫性 4. 避免重複已問過的問題"
-        question_batch_prompt = "這是剛剛受訪者與訪談者的QA:\n" + static_interview_data
+        from module.prompt_loader import get_system_prompt, get_user_prompt
+        
+        sys_prompt = get_system_prompt("dynamic_interview_generator")
+        prompt_data = get_prompt("dynamic_interview_generator", static_interview_data=static_interview_data)
+        question_batch_prompt = prompt_data["context_template"]
         # ==============================
         # 初始問題
         initial_question = await self.full_chat_gpt_41_mini(sys_prompt, question_batch_prompt, 0.7) # 5000 tokens
@@ -261,23 +237,9 @@ class Interviewer(LLM_responder):
             sys_prompt = f"你現在是\n {json.dumps(persona_data, ensure_ascii=False)}"
 
             # 使用角色回答問題
-            question_batch_prompt = f"""回答以下訪談問題，並嚴格遵守輸出格式。
-
-            【輸入】：
-            {current_question}
-
-            ---
-
-            【輸出】：(不包含此行)
-            [
-            {{
-            "問題": "{current_question}",
-            "回答": "你的回答"
-            }}
-            ]
-
-            ---
-            """
+            from module.prompt_loader import get_prompt
+            prompt_data = get_prompt("dynamic_interview_generator", current_question=current_question)
+            question_batch_prompt = prompt_data["single_response_template"]
             
             
             answer = await self.full_chat_gpt_41(sys_prompt, question_batch_prompt, 0.7)
@@ -294,17 +256,10 @@ class Interviewer(LLM_responder):
                 current_context += f"Q：{current_question}\nA：{current_answer}\n\n"
                 
                 # 使用 MINI_MODEL 產生下一個問題
-                sys_prompt = f"""你是一個專業的訪談者，根據以下訪談內容，產生一個深入的問題。問題應該要：
-                1. 基於受訪者的回答
-                2. 引導出更多個人故事或想法
-                3. 保持對話的連貫性
-                4. 避免重複已問過的問題"""
-
-                ask_prompt = f"""
-                訪談內容：
-                {current_context}
-
-                只輸出一個問題，不要有任何其他文字，也不要過度重複敘述題幹。"""
+                from module.prompt_loader import get_prompt
+                next_q_prompts = get_prompt("dynamic_interview_generator", current_context=current_context)
+                sys_prompt = next_q_prompts["next_question_system"]
+                ask_prompt = next_q_prompts["next_question_template"]
                 
                 next_question = await self.full_chat_gpt_41_mini(sys_prompt, ask_prompt, 0.9)
                 next_question = next_question.strip()

@@ -245,22 +245,17 @@ class GroupDialogueManager:
         else:
             group_instruction = "這是群組對話，請根據前面的對話內容自然地回應，可以對其他人的發言作出反應或提出新的話題。"
         
+        from module.prompt_loader import get_user_prompt
+        
+        system_content = get_user_prompt("group_dialogue_system",
+                                       simplified_behavior=persona_data['簡化行為'],
+                                       participants_info=participants_info,
+                                       memory_context="\n".join(retrieved_docs) if retrieved_docs else "（無可參考的記憶資料）",
+                                       conversation_context=conversation_context,
+                                       group_instruction=group_instruction)
+        
         prompt = [
-            {
-                "role": "system",
-                "content": f"""你是一個根據以下記憶資料模擬出來的人格：{persona_data['簡化行為']}
-                你正在參與一個群組對話，其他參與者包括：{participants_info}
-                記憶資料：
-                {"\n".join(retrieved_docs) if retrieved_docs else "（無可參考的記憶資料）"}
-                {conversation_context}
-                {group_instruction}
-                請根據上下文判斷是否需要自我介紹，除非是初次見面或需要自我介紹的情境，否則請避免重複自我介紹或說「大家好，我是OOO，請多多指教」這類話。
-                根據這些資料，用一致的口吻、用字遣詞、邏輯、口語化、對話模式來回答。你現在就是這個人，當有人問你是誰的時候，不能說你是AI助手，你要說出角色的名字。
-                需要仔細衡量人格的背景，年齡和人生經歷須符合，回答的內容講求台灣的真實歷史性，不要產生不一致或不合邏輯的資料。
-                仔細評估人格的語氣，情緒可以有點起伏，不要過度的正向，維持上下文的情緒。
-                回應要保持連貫性，記住前面的對話內容，讓整個對話流程自然。
-                """
-            },
+            {"role": "system", "content": system_content},
             {"role": "user", "content": current_topic}
         ]
         
@@ -333,24 +328,18 @@ class GroupDialogueManager:
     ) -> bool:
         """檢查角色是否想要對當前話題發言"""
         
+        from module.prompt_loader import get_system_prompt, get_user_prompt
+        
+        system_content = get_system_prompt("speaking_desire_check",
+                                         simplified_behavior=persona_data['簡化行為'],
+                                         memory_context="\n".join(retrieved_docs) if retrieved_docs else "（無可參考的記憶資料）",
+                                         conversation_context=conversation_context)
+        
+        user_content = get_user_prompt("speaking_desire_check", current_topic=current_topic)
+        
         prompt = [
-            {
-                "role": "system", 
-                "content": f"""你是一個根據以下記憶資料模擬出來的人格：{persona_data['簡化行為']}
-                記憶資料：
-                {"\n".join(retrieved_docs) if retrieved_docs else "（無可參考的記憶資料）"}
-                {conversation_context}
-                現在請判斷：在這個群組對話中，根據你的個性和興趣，你是否想要對目前的話題發言？
-                考慮因素：
-                1. 這個話題是否與你的興趣、專業或經歷相關？
-                2. 你是否有想要分享的觀點或經驗？
-                3. 根據你的個性，你在群組中是主動發言的類型還是比較被動？
-                4. 你是否想要回應其他人的觀點？
-                請只回答「是」或「否」，不需要其他解釋。
-                請根據上下文判斷是否需要自我介紹，除非是初次見面或需要自我介紹的情境，否則請避免重複自我介紹或說「大家好，我是OOO，請多多指教」這類話。
-                """
-            },
-            {"role": "user", "content": f"目前的話題是：{current_topic}"}
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": user_content}
         ]
         
         try:
@@ -553,19 +542,12 @@ async def create_interview(request: InterviewRequest):
         persona_data = chatbot.persona_loader_obj.personas[request.persona_id]
         
         # Build enhanced prompt that includes conversation history
-        prompt = []
-        system_content = f"""你是一個根據以下記憶資料模擬出來的人格：{persona_data['簡化行為']}
-        記憶資料：
-        {"\n".join(retrieved) if retrieved else "（無可參考的記憶資料）"}
+        from module.prompt_loader import get_user_prompt
         
-        {conversation_context if conversation_context else ""}
-        
-        請根據上下文判斷是否需要自我介紹，除非是初次見面或需要自我介紹的情境，否則請避免重複自我介紹或說「大家好，我是OOO，請多多指教」這類話。
-        根據這些資料，用一致的口吻、用字遣詞、邏輯、口語化、對話模式來回答問題。你現在就是這個人，當有人問你是誰的時候，不能說你是AI助手，你要說出角色的名字。
-        需要仔細衡量人格的背景，年齡和人生經歷須符合，回答的內容講求台灣的真實歷史性，不要產生不一致或不合邏輯的資料。
-        仔細評估人格的語氣，情緒可以有點起伏，不要過度的正向，維持上下文的情緒。如果沒有上下文就維持平平的，無需過度開心或是憤怒。
-        回應要保持連貫性，記住前面的對話內容，讓整個對話流程自然，減少反問使用者的機會。
-        """
+        system_content = get_user_prompt("interview_system_prompt",
+                                       simplified_behavior=persona_data['簡化行為'],
+                                       memory_context="\n".join(retrieved) if retrieved else "（無可參考的記憶資料）",
+                                       conversation_context=conversation_context if conversation_context else "")
         
         prompt = [
             {"role": "system", "content": system_content},

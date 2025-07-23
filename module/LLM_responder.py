@@ -142,24 +142,10 @@ class LLM_responder:
         # 產生一張0.04usd
         # style: 這邊放prompt嗎? 感覺不整齊
         # head in the middle prompt要補上去
-        sys_prompt="""
-            根據以下人物資料，生成一段用於圖像 AI 模型（如 DALL·E）的英文 prompt，描述他的證件照風格大頭照，背景為白色，鏡頭直視，專業且清晰，強調是亞洲人。根據年齡、性別、個性特質、語言風格、出生地等資訊，推理出這個人可能的外貌特徵（如微笑與否、眼神神情、髮型風格、服裝偏好、氣質感），並用英文精簡描述。
-            輸出格式為：
-            "Centered portrait with full head visible, not cropped, ample space above the head. Upper body in frame, symmetrical composition. A professional medium close up headshot of [描述], white background, neutral lighting, studio style, passport photo, high resolution"
-
-            範例輸入：
-            {
-            "姓名": "林書豪",
-            "年紀": 35,
-            "性別": "男",
-            "出生地": "台北",
-            "人格特質": ["溫柔", "熱情"],
-            "語言行為": "說話幽默、善於激勵人心"
-            }
-            範例輸出：
-            "a professional headshot of a mid-aged Asian man with a warm smile and confident posture, neat hairstyle, clean shave, wearing a light blue shirt and blazer, looking directly at the camera, white background, neutral lighting, studio style, passport photo, high resolution"
-            """
-        usr_prompt = f"""這是要具體化的人像數據: {persona_base_info}"""
+        from module.prompt_loader import get_system_prompt, get_user_prompt
+        
+        sys_prompt = get_system_prompt("persona_to_prompt_reification")
+        usr_prompt = get_user_prompt("persona_to_prompt_reification", persona_base_info=persona_base_info)
         response = await self.full_chat_gpt_41_mini(sys_prompt, usr_prompt, 0.7)
         return response
 

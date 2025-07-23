@@ -89,28 +89,18 @@ class StoryGenerator(LLM_responder):
     
     def _create_story_prompt(self, character_data):
         """創建故事生成的提示詞"""
+        from module.prompt_loader import get_user_prompt
+        
         base_info = character_data["基本資料"]
         traits = character_data["人格屬性"]["人格特質"]
         social = character_data["人格屬性"]["社交能力"]
         abilities = character_data["人格屬性"]["能力屬性"]
         
-        prompt = f"""
-        根據以下個人資料與人格特質，生成詳細背景故事：
-        基本資料: {json.dumps(base_info, ensure_ascii=False)}
-
-        人格特點：
-        - 主要特質：{', '.join(traits)}
-        - 社交風格：{', '.join(social)}
-        - 特殊能力：{', '.join(abilities)}
-
-        要求：
-        1. 包含童年經歷、重大人生事件、教育背景、家庭背景、對話模式
-        2. 說明職業選擇與興趣愛好
-        3. 字數500字或以上
-        4. 使用臺灣在地化用語
-        5. 年齡和人生經歷須符合
-        6. 避免出現『總是』、『每次』等絕對語句，描述時請以『傾向於』、『在適當情境下』等方式表達個性特徵。
-        """
+        prompt = get_user_prompt("story_generator",
+                               base_info=json.dumps(base_info, ensure_ascii=False),
+                               traits=', '.join(traits),
+                               social=', '.join(social),
+                               abilities=', '.join(abilities))
         return prompt
 
 # ========================================================================================
@@ -120,11 +110,15 @@ class ToneGenerator(LLM_responder):
     
     async def generate(self, full_character_data):
         """使用 LLM 生成語調說話方式 gpt-4o gpt-4.1都可以"""
+        from module.prompt_loader import get_system_prompt, get_user_prompt
         
-        prefix = "你是一位語言與人格建模專家。根據以下人物的基本資料，你要推論出這個人日常說話時的語氣特徵、常見詞彙風格、語調節奏，並描述其語言風格：\n基本資料："
-        usr = "用一段小短文，不要列點的，用1000字以內，具體描述這個人說話的語氣、節奏、常用語、說話方式等，可以提出範例句子。避免太抽象。請避免出現『總是』、『每次』等絕對語句，描述時請以『傾向於』、『在適當情境下』等方式表達個性特徵。"
+        sys_prompt = get_system_prompt("tone_generator")
+        user_prompt_template = get_user_prompt("tone_generator", character_data=json.dumps(full_character_data, ensure_ascii=False))
+        from module.prompt_loader import get_prompt
+        usr = get_prompt("tone_generator")["user"]
+        
         # 發送 API 請求
-        response = await self.full_chat_gpt_4o(prefix + json.dumps(full_character_data, ensure_ascii=False), usr, 0.7)
+        response = await self.full_chat_gpt_4o(sys_prompt + "\n" + user_prompt_template, usr, 0.7)
         
         return response
     
@@ -135,22 +129,15 @@ class SummarizedBehaviorGenerator(LLM_responder):
     
     async def generate(self, character_data):
         """使用 GPT-4.1-mini 生成簡化的行為描述"""
+        from module.prompt_loader import get_system_prompt, get_user_prompt
         
         life_story = character_data.get("生平故事", "")
         language_behavior = character_data.get("語言行為", "")
         
-        sys_prompt = "你是一位專業的人物特徵摘要專家。請將提供的人物生平和語言行為進行精簡濃縮，保留關鍵特徵和核心行為模式。"
-        usr_prompt = f"""
-        將以下人物的生平故事和語言行為濃縮為一段簡潔的描述，字數控制在200字以內：
-        
-        【生平故事】：
-        {life_story}
-        
-        【語言行為】：
-        {language_behavior}
-        
-        將核心的生平經歷和說話特點濃縮為一段簡短文字，使讀者能快速理解該人物的本質。
-        """
+        sys_prompt = get_system_prompt("summarized_behavior_generator")
+        usr_prompt = get_user_prompt("summarized_behavior_generator",
+                                   life_story=life_story,
+                                   language_behavior=language_behavior)
         
         response = await self.full_chat_gpt_41_mini(sys_prompt, usr_prompt, 0.7)
         return response
@@ -162,23 +149,10 @@ class AIParameterAnalyzer(LLM_responder):
     
     async def analyze(self, life_story):
         """分析生平故事並建議 AI 參數"""
+        from module.prompt_loader import get_system_prompt, get_user_prompt
         
-        sys_prompt = "你是一位專業的 AI 參數優化專家。請分析提供的人物生平故事，並根據內容的複雜性、創造性和一致性需求，建議最適合的 top_p 和 temperature 參數值。"
-        usr_prompt = f"""
-        分析以下人物生平故事，並根據內容特點提供建議的 AI 參數：
-        
-        【生平故事】：
-        {life_story}
-        temperature// 從 0.1 到 0.9 的值，如果人格特質內有複雜/創意內容推薦較高值，精確/事實內容推薦較低值
-        top_p// 從 0.1 到 1.0 的值，根據內容的多樣性需求決定
-
-        只回覆以下格式的 JSON 內容：
-        {{
-          "temperature": 0.X, 
-          "top_p": 0.X, 
-          "reason": "簡短的推薦理由（50字以內）"
-        }}
-        """
+        sys_prompt = get_system_prompt("ai_parameter_analyzer")
+        usr_prompt = get_user_prompt("ai_parameter_analyzer", life_story=life_story)
         
         response = await self.full_chat_gpt_41_nano(sys_prompt, usr_prompt, 0.5)
         

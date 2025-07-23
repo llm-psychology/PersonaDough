@@ -221,35 +221,29 @@ class FireScenarioSimulator:
 最近收到的訊息: {agent.messages_received[-3:] if agent.messages_received else '無'}
             """
 
+            from module.prompt_loader import get_system_prompt, get_user_prompt
+            
+            system_content = get_system_prompt("agent_decision_making",
+                                             agent_name=agent.name,
+                                             traits=agent.traits,
+                                             social_abilities=agent.social_abilities,
+                                             ability_attributes=agent.ability_attributes,
+                                             retrieved_docs=retrieved_docs[:2] if retrieved_docs else '無特別記憶')
+            
+            user_content = get_user_prompt("agent_decision_making",
+                                         situation_context=situation_context,
+                                         location=agent.location,
+                                         current_room=current_room,
+                                         available_exits=', '.join(available_exits),
+                                         other_agents=[a.name for a in other_agents_here],
+                                         panic_level=agent.panic_level,
+                                         health=agent.health,
+                                         known_fire=agent.known_fire,
+                                         recent_messages=agent.messages_received[-3:] if agent.messages_received else '無')
+
             prompt = [
-                {
-                    "role": "system",
-                    "content": f"""你是 {agent.name}，根據以下人格特質與記憶資料來做決策：
-人格特質: {agent.traits}
-社交能力: {agent.social_abilities}  
-能力屬性: {agent.ability_attributes}
-記憶資料: {retrieved_docs[:2] if retrieved_docs else '無特別記憶'}
-
-請根據當前情境做出最符合你人格的決策。你的回應必須是以下JSON格式：
-{{
-    "action": "move|stay|shout|help_others|search|panic",
-    "target": "房間名稱或人名（如果適用）",
-    "message": "如果要說話或呼救的內容",
-    "reasoning": "決策理由（50字內）"
-}}
-
-可能的行動：
-- move: 移動到其他房間
-- stay: 留在原地
-- shout: 大聲呼救或警告
-- help_others: 幫助他人
-- search: 搜尋出口或安全路線
-- panic: 恐慌行為
-
-請只回傳JSON，不要其他文字。
-                    """
-                },
-                {"role": "user", "content": context}
+                {"role": "system", "content": system_content},
+                {"role": "user", "content": user_content}
             ]
             
             response = await self.chatbot.interviewer_obj.simulate_persona_answer(prompt)
