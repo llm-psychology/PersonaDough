@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 import json
 import os
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 import uvicorn
 import glob
 import uuid
@@ -888,7 +888,7 @@ class FireSimulationResponse(BaseModel):
 @app.get("/fire-simulation")
 async def serve_fire_simulation_ui():
     """提供火災模擬 UI 頁面 (Polling版本)"""
-    return FileResponse("templates/fire_simulation.html", media_type="text/html")
+    return FileResponse("fire_simulation.html", media_type="text/html")
 
 @app.get("/fire-simulation-sse")
 async def serve_fire_simulation_sse_ui():
@@ -1197,6 +1197,601 @@ async def list_active_simulations():
             "tick": sim_data["tick"],
             "finished": sim_data.get("finished", False),
             "num_agents": len(sim_data["agents_data"])
+        })
+    
+    return {"simulations": simulations}
+
+# =======================================================
+
+# 新增模組化模擬相關的數據模型
+class ScenarioInfo(BaseModel):
+    id: str
+    name: str
+    description: str
+    scenario_type: str
+    complexity: str
+    features: List[str]
+    parameters: Dict[str, Any]
+
+class MapConfiguration(BaseModel):
+    rooms: Dict[str, Dict[str, Any]]
+    connections: List[Dict[str, Any]]
+    metadata: Optional[Dict[str, Any]] = {}
+
+class AgentConfiguration(BaseModel):
+    count: int
+    types: Dict[str, int]  # 類型分布
+    spawn_location: str
+    custom_traits: Optional[List[str]] = []
+
+class SimulationParameters(BaseModel):
+    max_rounds: int = 50
+    speed: float = 1.0
+    random_seed: Optional[int] = None
+    initial_temperature: float = 25.0
+    initial_visibility: float = 100.0
+    panic_spread_rate: float = 0.3
+    speed_variation: float = 0.2
+    scenario_specific: Optional[Dict[str, Any]] = {}
+
+class ModularSimulationRequest(BaseModel):
+    scenario_id: str
+    map_config: MapConfiguration
+    agent_config: AgentConfiguration
+    parameters: SimulationParameters
+    session_id: Optional[str] = None
+
+class ModularSimulationResponse(BaseModel):
+    simulation_id: str
+    status: str
+    message: str
+    session_id: str
+
+# 在現有的 app 定義後添加新的路由
+
+# =======================================================
+# 模組化模擬框架 API 端點
+# =======================================================
+
+@app.get("/simulation-frontend")
+def serve_simulation_frontend():
+    """提供模組化模擬前端界面"""
+    return FileResponse("simulation_frontend.html", media_type="text/html")
+
+@app.get("/api/scenarios", response_model=List[ScenarioInfo])
+async def get_available_scenarios():
+    """獲取可用的模擬情境列表"""
+    try:
+        scenarios = [
+            ScenarioInfo(
+                id="fire",
+                name="火災情境",
+                description="建築物內火災蔓延與人員疏散模擬",
+                scenario_type="emergency",
+                complexity="中等",
+                features=["火勢蔓延", "煙霧擴散", "結構損壞", "緊急疏散"],
+                parameters={
+                    "fire_spread_rate": {"type": "float", "default": 0.1, "min": 0.0, "max": 1.0},
+                    "smoke_density": {"type": "float", "default": 0.5, "min": 0.0, "max": 1.0},
+                    "structural_damage": {"type": "bool", "default": True},
+                    "emergency_exits": {"type": "int", "default": 2, "min": 1, "max": 10}
+                }
+            ),
+            ScenarioInfo(
+                id="earthquake",
+                name="地震情境",
+                description="地震發生時的建築物搖晃與人員避難",
+                scenario_type="natural_disaster",
+                complexity="高",
+                features=["地震波動", "建築搖晃", "物品掉落", "避難行為"],
+                parameters={
+                    "magnitude": {"type": "float", "default": 6.0, "min": 1.0, "max": 9.0},
+                    "duration": {"type": "int", "default": 60, "min": 10, "max": 300},
+                    "aftershocks": {"type": "bool", "default": True},
+                    "building_stability": {"type": "float", "default": 0.8, "min": 0.1, "max": 1.0}
+                }
+            ),
+            ScenarioInfo(
+                id="flood",
+                name="水災情境",
+                description="洪水淹沒區域的人員撤離模擬",
+                scenario_type="natural_disaster",
+                complexity="中等",
+                features=["水位上升", "區域淹沒", "交通阻斷", "高地避難"],
+                parameters={
+                    "water_rise_rate": {"type": "float", "default": 0.05, "min": 0.01, "max": 0.5},
+                    "max_water_level": {"type": "float", "default": 2.0, "min": 0.5, "max": 10.0},
+                    "evacuation_warning": {"type": "int", "default": 30, "min": 0, "max": 120}
+                }
+            ),
+            ScenarioInfo(
+                id="power_outage",
+                name="停電情境",
+                description="大規模停電時的人員行為與應對",
+                scenario_type="infrastructure",
+                complexity="低",
+                features=["照明中斷", "電梯停擺", "通訊受限", "緊急照明"],
+                parameters={
+                    "emergency_lighting": {"type": "bool", "default": True},
+                    "backup_power_duration": {"type": "int", "default": 120, "min": 0, "max": 600},
+                    "communication_loss": {"type": "float", "default": 0.8, "min": 0.0, "max": 1.0}
+                }
+            ),
+            ScenarioInfo(
+                id="terror_attack",
+                name="恐攻情境",
+                description="恐怖攻擊事件的人員疏散與應對",
+                scenario_type="security",
+                complexity="高",
+                features=["威脅來源", "恐慌傳播", "封鎖區域", "安全疏散"],
+                parameters={
+                    "threat_locations": {"type": "int", "default": 1, "min": 1, "max": 5},
+                    "lockdown_zones": {"type": "bool", "default": True},
+                    "panic_amplification": {"type": "float", "default": 1.5, "min": 1.0, "max": 3.0},
+                    "security_response_time": {"type": "int", "default": 300, "min": 60, "max": 1800}
+                }
+            ),
+            ScenarioInfo(
+                id="pandemic",
+                name="疫情情境",
+                description="傳染病擴散的人員流動控制模擬",
+                scenario_type="health",
+                complexity="高",
+                features=["病毒傳播", "隔離措施", "社交距離", "檢疫流程"],
+                parameters={
+                    "transmission_rate": {"type": "float", "default": 0.15, "min": 0.01, "max": 1.0},
+                    "incubation_period": {"type": "int", "default": 14, "min": 1, "max": 30},
+                    "social_distancing": {"type": "float", "default": 2.0, "min": 1.0, "max": 5.0},
+                    "quarantine_effectiveness": {"type": "float", "default": 0.9, "min": 0.1, "max": 1.0}
+                }
+            )
+        ]
+        
+        logger.info(f"返回 {len(scenarios)} 個可用情境")
+        return scenarios
+        
+    except Exception as e:
+        logger.error(f"獲取情境列表失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"獲取情境列表失敗: {str(e)}")
+
+@app.get("/api/scenarios/{scenario_id}", response_model=ScenarioInfo)
+async def get_scenario_details(scenario_id: str):
+    """獲取特定情境的詳細資訊"""
+    try:
+        scenarios = await get_available_scenarios()
+        scenario = next((s for s in scenarios if s.id == scenario_id), None)
+        
+        if not scenario:
+            raise HTTPException(status_code=404, detail=f"情境 {scenario_id} 不存在")
+        
+        return scenario
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"獲取情境詳情失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"獲取情境詳情失敗: {str(e)}")
+
+@app.post("/api/map/validate")
+async def validate_map_configuration(map_config: MapConfiguration):
+    """驗證地圖配置的有效性"""
+    try:
+        rooms = map_config.rooms
+        connections = map_config.connections
+        
+        # 基本驗證
+        errors = []
+        warnings = []
+        
+        # 檢查是否有房間
+        if not rooms:
+            errors.append("地圖必須至少包含一個房間")
+        
+        # 檢查是否有出口
+        exits = [room for room in rooms.values() if room.get("is_exit", False)]
+        if not exits:
+            warnings.append("建議至少設置一個出口房間")
+        
+        # 檢查連接完整性
+        room_ids = set(rooms.keys())
+        for conn in connections:
+            if conn.get("from") not in room_ids:
+                errors.append(f"連接中的房間 {conn.get('from')} 不存在")
+            if conn.get("to") not in room_ids:
+                errors.append(f"連接中的房間 {conn.get('to')} 不存在")
+        
+        # 檢查連通性（簡化版）
+        if len(rooms) > 1 and not connections:
+            warnings.append("多個房間之間應該有連接路徑")
+        
+        return {
+            "valid": len(errors) == 0,
+            "errors": errors,
+            "warnings": warnings,
+            "room_count": len(rooms),
+            "connection_count": len(connections),
+            "exit_count": len(exits)
+        }
+        
+    except Exception as e:
+        logger.error(f"地圖驗證失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"地圖驗證失敗: {str(e)}")
+
+@app.post("/api/agents/generate")
+async def generate_simulation_agents(agent_config: AgentConfiguration):
+    """根據配置生成模擬代理人"""
+    try:
+        # 初始化角色生成器
+        if not hasattr(app.state, 'persona_loader'):
+            from module.PERSONA_loader import PersonaLoader
+            app.state.persona_loader = PersonaLoader()
+        
+        # 獲取現有的 persona 列表
+        existing_personas = list(app.state.persona_loader.personas.keys())
+        
+        if len(existing_personas) < agent_config.count:
+            # 如果現有角色不足，生成新的
+            needed = agent_config.count - len(existing_personas)
+            logger.info(f"需要生成 {needed} 個新角色")
+            
+            for _ in range(needed):
+                try:
+                    new_id = await generate_a_persona()
+                    await generate_persona_rag_by_id(new_id)
+                    existing_personas.append(new_id)
+                except Exception as e:
+                    logger.warning(f"生成角色失敗: {e}")
+        
+        # 從現有角色中選擇
+        import random
+        selected_personas = random.sample(existing_personas, min(agent_config.count, len(existing_personas)))
+        
+        # 為每個選中的 persona 生成代理人資料
+        agents = []
+        for i, persona_id in enumerate(selected_personas):
+            try:
+                persona_data = app.state.persona_loader.personas[persona_id]
+                agent = {
+                    "id": f"agent_{i}",
+                    "persona_id": persona_id,
+                    "name": persona_data['基本資料']['姓名'],
+                    "age": persona_data['基本資料']['年紀'],
+                    "gender": persona_data['基本資料']['性別'],
+                    "traits": persona_data['人格屬性']['人格特質'],
+                    "social_abilities": persona_data['人格屬性']['社交能力'],
+                    "ability_attributes": persona_data['人格屬性']['能力屬性'],
+                    "spawn_location": agent_config.spawn_location,
+                    "status": "active",
+                    "health": 100,
+                    "panic_level": 0
+                }
+                agents.append(agent)
+            except Exception as e:
+                logger.warning(f"處理 persona {persona_id} 失敗: {e}")
+        
+        return {
+            "success": True,
+            "agent_count": len(agents),
+            "agents": agents,
+            "message": f"成功生成 {len(agents)} 個代理人"
+        }
+        
+    except Exception as e:
+        logger.error(f"生成代理人失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"生成代理人失敗: {str(e)}")
+
+@app.post("/api/simulation/start", response_model=ModularSimulationResponse)
+async def start_modular_simulation(request: ModularSimulationRequest):
+    """啟動模組化模擬"""
+    try:
+        # 驗證情境
+        scenario = await get_scenario_details(request.scenario_id)
+        
+        # 驗證地圖
+        map_validation = await validate_map_configuration(request.map_config)
+        if not map_validation["valid"]:
+            raise HTTPException(status_code=400, detail=f"地圖配置無效: {', '.join(map_validation['errors'])}")
+        
+        # 生成模擬 ID
+        simulation_id = f"sim_{request.scenario_id}_{str(uuid.uuid4())[:8]}"
+        session_id = request.session_id or f"session_{str(uuid.uuid4())[:8]}"
+        
+        # 根據情境類型創建對應的模擬器
+        if request.scenario_id == "fire":
+            # 使用現有的火災模擬器
+            simulator = FireScenarioSimulator()
+            await simulator.initialize()
+            
+            # 注意：當前的FireScenarioSimulator使用預設的房間配置
+            # 未來版本將支援自訂地圖配置
+            
+            # 創建代理人
+            await simulator.create_agents_from_database(request.agent_config.count)
+        
+        else:
+            # 其他情境類型的模擬器（待實作）
+            raise HTTPException(status_code=501, detail=f"情境 {request.scenario_id} 的模擬器尚未實作")
+        
+        # 儲存模擬配置
+        simulation_data = {
+            "simulator": simulator,
+            "config": request.dict(),
+            "status": "running",
+            "tick": 0,
+            "start_time": asyncio.get_event_loop().time(),
+            "agents_data": [],
+            "environment_data": {},
+            "events": [],
+            "finished": False
+        }
+        
+        active_simulations[simulation_id] = simulation_data
+        
+        # 在背景執行模擬
+        asyncio.create_task(run_modular_simulation_background(
+            simulation_id,
+            request.parameters.max_rounds,
+            request.parameters.speed
+        ))
+        
+        logger.info(f"啟動模組化模擬: {simulation_id}")
+        
+        return ModularSimulationResponse(
+            simulation_id=simulation_id,
+            status="started",
+            message=f"模擬已啟動 - 情境: {scenario.name}",
+            session_id=session_id
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"啟動模組化模擬失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"啟動模擬失敗: {str(e)}")
+
+async def run_modular_simulation_background(simulation_id: str, max_rounds: int, speed: float):
+    """在背景執行模組化模擬"""
+    try:
+        sim_data = active_simulations[simulation_id]
+        simulator = sim_data["simulator"]
+        
+        logger.info(f"開始執行模組化模擬 {simulation_id}")
+        
+        for round_num in range(max_rounds):
+            if sim_data["status"] != "running":
+                break
+            
+            # 執行一個模擬步驟
+            if hasattr(simulator, 'fire_scenario_tick'):
+                # 火災情境
+                tick_events = await simulator.fire_scenario_tick()
+            else:
+                # 其他情境的模擬邏輯
+                tick_events = []
+            
+            # 更新模擬資料
+            sim_data["tick"] = simulator.tick if hasattr(simulator, 'tick') else round_num
+            sim_data["events"] = tick_events
+            
+            # 更新代理人資料
+            if hasattr(simulator, 'agents'):
+                sim_data["agents_data"] = [
+                    {
+                        "id": agent.id,
+                        "name": agent.name,
+                        "location": agent.location,
+                        "health": agent.health,
+                        "panic_level": getattr(agent, 'panic_level', 0),
+                        "escaped": getattr(agent, 'escaped', False),
+                        "injured": getattr(agent, 'injured', False),
+                        "status": get_agent_status(agent),
+                        "current_action": getattr(agent, 'current_action', '等待中...'),
+                    }
+                    for agent in simulator.agents
+                ]
+            
+            # 更新環境資料
+            if hasattr(simulator, 'rooms'):
+                sim_data["environment_data"] = {
+                    "rooms": {
+                        name: {
+                            "name": name,
+                            "on_fire": getattr(room, 'on_fire', False),
+                            "smoke": getattr(room, 'smoke', 0),
+                            "temperature": getattr(room, 'temperature', 25),
+                            "visibility": getattr(room, 'visibility', 100),
+                            "is_exit": getattr(room, 'is_exit', False),
+                            "blocked": getattr(room, 'blocked', False)
+                        }
+                        for name, room in simulator.rooms.items()
+                    }
+                }
+            
+            # 檢查結束條件
+            if hasattr(simulator, 'agents'):
+                active_agents = [a for a in simulator.agents 
+                               if not getattr(a, 'escaped', False) and not getattr(a, 'injured', False)]
+                if not active_agents:
+                    sim_data["finished"] = True
+                    sim_data["status"] = "completed"
+                    break
+            
+            # 控制模擬速度
+            await asyncio.sleep(speed)
+        
+        # 模擬結束處理
+        if sim_data["status"] == "running":
+            sim_data["status"] = "completed"
+            sim_data["finished"] = True
+        
+        # 計算最終統計
+        if hasattr(simulator, 'agents'):
+            total_agents = len(simulator.agents)
+            escaped_count = sum(1 for a in simulator.agents if getattr(a, 'escaped', False))
+            injured_count = sum(1 for a in simulator.agents if getattr(a, 'injured', False))
+            
+            sim_data["final_stats"] = {
+                "total_agents": total_agents,
+                "escaped_count": escaped_count,
+                "injured_count": injured_count,
+                "escape_rate": escaped_count / total_agents if total_agents > 0 else 0,
+                "injury_rate": injured_count / total_agents if total_agents > 0 else 0,
+                "total_rounds": sim_data["tick"],
+                "simulation_time": asyncio.get_event_loop().time() - sim_data["start_time"]
+            }
+        
+        logger.info(f"模組化模擬 {simulation_id} 完成")
+        
+    except Exception as e:
+        logger.error(f"模組化模擬 {simulation_id} 執行失敗: {e}", exc_info=True)
+        sim_data["status"] = "error"
+        sim_data["error"] = str(e)
+
+def get_agent_status(agent):
+    """獲取代理人狀態描述"""
+    if getattr(agent, 'escaped', False):
+        return "已逃生"
+    elif getattr(agent, 'injured', False):
+        return "受傷"
+    elif getattr(agent, 'panic_level', 0) > 0.7:
+        return "恐慌中"
+    elif getattr(agent, 'health', 100) < 50:
+        return "健康不佳"
+    else:
+        return "正常"
+
+@app.get("/api/simulation/{simulation_id}/status")
+async def get_modular_simulation_status(simulation_id: str):
+    """獲取模組化模擬狀態"""
+    if simulation_id not in active_simulations:
+        raise HTTPException(status_code=404, detail="模擬不存在")
+    
+    sim_data = active_simulations[simulation_id]
+    
+    response = {
+        "simulation_id": simulation_id,
+        "status": sim_data["status"],
+        "tick": sim_data["tick"],
+        "finished": sim_data.get("finished", False),
+        "agents": sim_data.get("agents_data", []),
+        "environment": sim_data.get("environment_data", {}),
+        "events": sim_data.get("events", []),
+        "config": sim_data.get("config", {})
+    }
+    
+    if sim_data.get("final_stats"):
+        response["final_stats"] = sim_data["final_stats"]
+    
+    if sim_data.get("error"):
+        response["error"] = sim_data["error"]
+    
+    return response
+
+@app.get("/api/simulation/{simulation_id}/stream")
+async def get_modular_simulation_stream(simulation_id: str):
+    """提供模組化模擬的實時串流資料"""
+    if simulation_id not in active_simulations:
+        raise HTTPException(status_code=404, detail="模擬不存在")
+    
+    async def event_generator():
+        connection_id = str(uuid.uuid4())[:8]
+        logger.info(f"新的模組化模擬SSE連接: {connection_id} for {simulation_id}")
+        
+        try:
+            # 發送連接確認
+            yield f"event: connected\ndata: {json.dumps({'simulation_id': simulation_id, 'connection_id': connection_id}, ensure_ascii=False)}\n\n"
+            
+            last_tick = -1
+            
+            while simulation_id in active_simulations:
+                sim_data = active_simulations[simulation_id]
+                current_tick = sim_data.get("tick", 0)
+                
+                if current_tick != last_tick or sim_data.get("finished", False):
+                    # 準備更新資料
+                    update_data = {
+                        "tick": current_tick,
+                        "status": sim_data.get("status", "unknown"),
+                        "agents": sim_data.get("agents_data", []),
+                        "environment": sim_data.get("environment_data", {}),
+                        "events": sim_data.get("events", []),
+                        "finished": sim_data.get("finished", False)
+                    }
+                    
+                    if sim_data.get("finished", False):
+                        update_data["final_stats"] = sim_data.get("final_stats", {})
+                    
+                    # 發送更新
+                    yield f"event: simulation_update\ndata: {json.dumps(update_data, ensure_ascii=False)}\n\n"
+                    
+                    last_tick = current_tick
+                    
+                    if sim_data.get("finished", False):
+                        yield f"event: simulation_ended\ndata: {json.dumps({'message': '模擬結束'}, ensure_ascii=False)}\n\n"
+                        break
+                
+                await asyncio.sleep(0.5)
+                
+        except Exception as e:
+            logger.error(f"模組化模擬SSE錯誤 {connection_id}: {e}")
+            yield f"event: error\ndata: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+        finally:
+            logger.info(f"模組化模擬SSE連接 {connection_id} 關閉")
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*"
+        }
+    )
+
+@app.post("/api/simulation/{simulation_id}/control")
+async def control_modular_simulation(simulation_id: str, action: str = Query(...)):
+    """控制模組化模擬（暫停、繼續、停止）"""
+    if simulation_id not in active_simulations:
+        raise HTTPException(status_code=404, detail="模擬不存在")
+    
+    sim_data = active_simulations[simulation_id]
+    
+    if action == "pause":
+        sim_data["status"] = "paused"
+    elif action == "resume":
+        sim_data["status"] = "running"
+    elif action == "stop":
+        sim_data["status"] = "stopped"
+    else:
+        raise HTTPException(status_code=400, detail="無效的控制動作")
+    
+    logger.info(f"模擬 {simulation_id} 控制動作: {action}")
+    return {"message": f"模擬 {action} 成功", "status": sim_data["status"]}
+
+@app.delete("/api/simulation/{simulation_id}")
+async def delete_modular_simulation(simulation_id: str):
+    """刪除模組化模擬"""
+    if simulation_id not in active_simulations:
+        raise HTTPException(status_code=404, detail="模擬不存在")
+    
+    del active_simulations[simulation_id]
+    logger.info(f"刪除模組化模擬: {simulation_id}")
+    return {"message": "模擬已刪除"}
+
+@app.get("/api/simulations")
+async def list_all_simulations():
+    """列出所有活躍的模擬"""
+    simulations = []
+    for sim_id, sim_data in active_simulations.items():
+        config = sim_data.get("config", {})
+        simulations.append({
+            "simulation_id": sim_id,
+            "scenario_id": config.get("scenario_id", "unknown"),
+            "status": sim_data["status"],
+            "tick": sim_data["tick"],
+            "finished": sim_data.get("finished", False),
+            "agent_count": len(sim_data.get("agents_data", [])),
+            "start_time": sim_data.get("start_time", 0)
         })
     
     return {"simulations": simulations}

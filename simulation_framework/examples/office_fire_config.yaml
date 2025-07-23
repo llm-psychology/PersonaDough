@@ -1,0 +1,225 @@
+name: "辦公大樓火災疏散演練"
+description: "模擬一棟三層辦公大樓發生火災時的緊急疏散過程，測試不同疏散策略的效果"
+scenario_type: "fire"
+version: "1.2.0"
+
+# 地圖配置
+map_config:
+  map_file: "simulation_framework/maps/examples/office_building_3f.json"
+  building_name: "創新科技大樓"
+  total_floors: 3
+  
+# 代理人配置
+min_agents: 10
+max_agents: 100
+default_agents: 35
+agent_spawn_areas: 
+  - "office_1f_a"
+  - "office_1f_b" 
+  - "office_2f_a"
+  - "office_2f_b"
+  - "office_3f_a"
+  - "meeting_room_2f"
+  - "cafeteria_1f"
+
+# 時間配置
+max_ticks: 150
+tick_duration: 2.0  # 每個tick代表2秒
+real_time_factor: 0.5  # 模擬速度為實時的0.5倍
+
+# 火災情境特定參數
+scenario_params:
+  # 火災起始設定
+  initial_fire_room: "kitchen_1f"
+  initial_fire_intensity: 1
+  
+  # 火災蔓延參數
+  fire_spread_probability: 0.25
+  fire_spread_cooldown: 3
+  smoke_spread_probability: 0.6
+  smoke_spread_cooldown: 1
+  
+  # 傷害參數
+  fire_damage_per_tick: 12
+  smoke_damage_per_tick: 4
+  panic_increase_fire: 20
+  panic_increase_smoke: 8
+  
+  # 環境參數
+  temperature_increase_per_fire: 8
+  visibility_decrease_per_smoke: 15
+  air_quality_decrease_per_smoke: 25
+  
+  # 結構損壞參數
+  structure_damage_threshold: 15
+  blocked_passage_probability: 0.3
+
+# 觸發條件設定
+start_triggers:
+  - type: "time_based"
+    target_tick: 0
+    description: "火災在廚房開始"
+  
+  - type: "time_based"
+    target_tick: 8
+    description: "火災警報系統啟動"
+    
+  - type: "time_based" 
+    target_tick: 25
+    description: "消防車到達現場"
+
+# 結束條件
+end_conditions:
+  - type: "all_agents_resolved"
+    description: "所有代理人都已逃生或無法行動"
+  
+  - type: "max_time_reached"
+    description: "達到最大模擬時間"
+    
+  - type: "fire_spread_critical"
+    threshold: 0.7
+    description: "火災蔓延超過70%的區域"
+    
+  - type: "casualty_rate_critical"
+    threshold: 0.4
+    description: "傷亡率超過40%"
+
+# 成功評估標準
+success_criteria:
+  # 主要指標
+  min_escape_rate: 0.85        # 至少85%的人員成功逃生
+  max_injury_rate: 0.15        # 受傷率不超過15%
+  max_evacuation_time: 240     # 疏散時間不超過240秒(120 ticks)
+  
+  # 次要指標  
+  min_average_health: 70       # 平均健康度至少70%
+  max_average_panic: 60        # 平均恐慌程度不超過60%
+  max_fire_spread_ratio: 0.4   # 火災蔓延比例不超過40%
+  
+  # 評分權重
+  escape_rate_weight: 0.4
+  injury_rate_weight: 0.3
+  evacuation_time_weight: 0.2
+  other_metrics_weight: 0.1
+
+# 高級觸發器配置
+advanced_triggers:
+  # 火災蔓延加速
+  - id: "fire_acceleration"
+    name: "火災加速蔓延"
+    condition:
+      type: "composite"
+      logic: "AND"
+      conditions:
+        - type: "time_based"
+          target_tick: 20
+          operator: ">="
+        - type: "location_based"
+          location_id: "kitchen_1f"
+          property_name: "fire_level"
+          expected_value: 1
+          operator: ">="
+    event_template:
+      name: "火勢加劇"
+      description: "廚房火災加劇，蔓延速度增加"
+      event_type: "fire_acceleration"
+      priority: 4
+    is_repeatable: false
+    
+  # 電力系統故障
+  - id: "power_failure"
+    name: "電力系統故障"
+    condition:
+      type: "random"
+      probability: 0.15
+      cooldown: 30
+    event_template:
+      name: "停電"
+      description: "火災導致電力系統故障，電梯停止運作"
+      event_type: "power_failure" 
+      priority: 3
+      duration: 999  # 持續到模擬結束
+    is_repeatable: false
+    
+  # 群體恐慌
+  - id: "mass_panic"
+    name: "群體恐慌"
+    condition:
+      type: "agent_based"
+      agent_condition: "panic_level_high"
+      threshold: 5
+    event_template:
+      name: "群體恐慌"
+      description: "多人恐慌引發群體恐慌效應"
+      event_type: "mass_panic"
+      priority: 3
+      duration: 5
+    is_repeatable: false
+
+# 代理人行為配置
+agent_behavior:
+  # 決策參數
+  decision_factors:
+    health_weight: 0.3
+    panic_weight: 0.25
+    distance_to_exit_weight: 0.2
+    fire_proximity_weight: 0.15
+    social_influence_weight: 0.1
+  
+  # 移動參數
+  movement:
+    base_speed: 1.0
+    panic_speed_modifier: 1.5
+    injury_speed_modifier: 0.6
+    smoke_speed_modifier: 0.8
+  
+  # 社交行為
+  social_behavior:
+    help_others_probability: 0.3
+    follow_leader_probability: 0.4
+    share_information_probability: 0.6
+
+# 環境效果配置
+environmental_effects:
+  # 溫度效果
+  temperature:
+    comfort_range: [18, 25]
+    discomfort_threshold: 35
+    danger_threshold: 50
+    
+  # 煙霧效果
+  smoke:
+    visibility_impact: 
+      light: 0.1    # 10% 能見度降低
+      medium: 0.3   # 30% 能見度降低  
+      heavy: 0.6    # 60% 能見度降低
+    breathing_impact:
+      light: 2      # 每tick 2點健康損失
+      medium: 5     # 每tick 5點健康損失
+      heavy: 10     # 每tick 10點健康損失
+
+# 報告配置
+reporting:
+  # 即時統計
+  real_time_metrics:
+    - "current_escaped_count"
+    - "current_injured_count" 
+    - "fire_spread_percentage"
+    - "average_panic_level"
+    - "evacuation_progress"
+  
+  # 最終報告項目
+  final_report:
+    include_agent_paths: true
+    include_decision_log: true
+    include_event_timeline: true
+    include_heatmaps: true
+    
+  # 匯出格式
+  export_formats: ["json", "csv", "pdf"]
+
+# 實驗變量（用於批次模擬）
+experiment_variables:
+  agent_count: [20, 35, 50]
+  fire_spread_probability: [0.2, 0.25, 0.3]
+  initial_fire_room: ["kitchen_1f", "office_2f_a", "server_room_3f"] 

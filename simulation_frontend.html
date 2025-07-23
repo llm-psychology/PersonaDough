@@ -1,0 +1,1619 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>綜合情境模擬器 - Simulation Framework</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <!-- Bootstrap 5 + Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <style>
+    :root {
+      --bg-primary: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-tertiary: #21262d;
+      --border-color: #30363d;
+      --text-primary: #f0f6fc;
+      --text-secondary: #8b949e;
+      --accent-color: #238636;
+      --accent-hover: #2ea043;
+      --danger-color: #da3633;
+      --warning-color: #fb8500;
+      --info-color: #0969da;
+      
+      /* 覆蓋 Bootstrap 預設變數以確保在深色主題下可見 */
+      --bs-secondary-color: #8b949e;
+      --bs-card-title-color: #f0f6fc;
+      --bs-body-color: #f0f6fc;
+      --bs-text-muted: #8b949e;
+      --bs-heading-color: #f0f6fc;
+      --bs-link-color: #58a6ff;
+      --bs-link-hover-color: #79b8ff;
+    }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      line-height: 1.6;
+    }
+
+    .navbar {
+      background: var(--bg-secondary) !important;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .card {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+    }
+
+    .card-header {
+      background: var(--bg-tertiary);
+      border-bottom: 1px solid var(--border-color);
+      font-weight: 600;
+    }
+
+    .form-control, .form-select {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      color: var(--text-primary);
+    }
+
+    .form-control:focus, .form-select:focus {
+      background: var(--bg-tertiary);
+      border-color: var(--accent-color);
+      color: var(--text-primary);
+      box-shadow: 0 0 0 0.2rem rgba(35, 134, 54, 0.25);
+    }
+
+    .btn-primary {
+      background: var(--accent-color);
+      border-color: var(--accent-color);
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+    }
+
+    .btn-danger {
+      background: var(--danger-color);
+      border-color: var(--danger-color);
+    }
+
+    .btn-warning {
+      background: var(--warning-color);
+      border-color: var(--warning-color);
+    }
+
+    .btn-info {
+      background: var(--info-color);
+      border-color: var(--info-color);
+    }
+
+    .scenario-card {
+      transition: all 0.3s ease;
+      cursor: pointer;
+      height: 100%;
+    }
+
+    .scenario-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+      border-color: var(--accent-color);
+    }
+
+    .scenario-card.selected {
+      border-color: var(--accent-color);
+      box-shadow: 0 0 20px rgba(35, 134, 54, 0.3);
+    }
+
+    .scenario-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+
+    .map-canvas {
+      border: 2px solid var(--border-color);
+      border-radius: 8px;
+      background: var(--bg-tertiary);
+      min-height: 400px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .simulation-status {
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+
+    .simulation-status.running {
+      background: rgba(35, 134, 54, 0.1);
+      border: 1px solid var(--accent-color);
+    }
+
+    .simulation-status.completed {
+      background: rgba(9, 105, 218, 0.1);
+      border: 1px solid var(--info-color);
+    }
+
+    .simulation-status.error {
+      background: rgba(218, 54, 51, 0.1);
+      border: 1px solid var(--danger-color);
+    }
+
+    .agent-list {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .agent-card {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+      padding: 0.75rem;
+      transition: all 0.2s ease;
+    }
+
+    .agent-card:hover {
+      border-color: var(--accent-color);
+    }
+
+    .config-section {
+      background: var(--bg-tertiary);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .modal-content {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+    }
+
+    .modal-header {
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .modal-footer {
+      border-top: 1px solid var(--border-color);
+    }
+
+    .toast {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+    }
+
+    .room-node {
+      position: absolute;
+      width: 80px;
+      height: 60px;
+      border: 2px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--bg-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .room-node:hover {
+      border-color: var(--accent-color);
+      transform: scale(1.05);
+    }
+
+    .room-node.on-fire {
+      background: rgba(218, 54, 51, 0.3);
+      border-color: var(--danger-color);
+      animation: pulse 2s infinite;
+    }
+
+    .room-node.with-smoke {
+      background: rgba(123, 123, 123, 0.3);
+      border-color: #666;
+    }
+
+    .room-node.exit {
+      background: rgba(35, 134, 54, 0.3);
+      border-color: var(--accent-color);
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(218, 54, 51, 0.7); }
+      70% { box-shadow: 0 0 0 10px rgba(218, 54, 51, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(218, 54, 51, 0); }
+    }
+
+    .connection-line {
+      position: absolute;
+      height: 2px;
+      background: var(--border-color);
+      transform-origin: left center;
+    }
+
+    .parameter-group {
+      background: var(--bg-primary);
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .stat-card {
+      background: var(--bg-tertiary);
+      padding: 1rem;
+      border-radius: 8px;
+      text-align: center;
+      border: 1px solid var(--border-color);
+    }
+
+    .stat-value {
+      font-size: 2rem;
+      font-weight: bold;
+      color: var(--accent-color);
+    }
+
+    .log-container {
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      height: 300px;
+      overflow-y: auto;
+      padding: 1rem;
+      font-family: 'Courier New', monospace;
+      font-size: 0.85rem;
+    }
+
+    .log-entry {
+      margin-bottom: 0.5rem;
+      padding: 0.25rem 0;
+    }
+
+    .log-entry.info { color: var(--info-color); }
+    .log-entry.warning { color: var(--warning-color); }
+    .log-entry.error { color: var(--danger-color); }
+    .log-entry.success { color: var(--accent-color); }
+
+    .sidebar {
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border-color);
+      min-height: calc(100vh - 56px);
+    }
+
+    .nav-pills .nav-link {
+      color: var(--text-secondary);
+      border-radius: 6px;
+      margin-bottom: 0.5rem;
+    }
+
+    .nav-pills .nav-link.active {
+      background: var(--accent-color);
+      color: white;
+    }
+
+    .nav-pills .nav-link:hover:not(.active) {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .spinner-border {
+      width: 1.5rem;
+      height: 1.5rem;
+    }
+
+    .scenario-type-fire { color: #ff6b35; }
+    .scenario-type-earthquake { color: #8b5a3c; }
+    .scenario-type-flood { color: #0077be; }
+    .scenario-type-power-outage { color: #ffd23f; }
+    .scenario-type-terror-attack { color: #c21807; }
+    .scenario-type-pandemic { color: #9d4edd; }
+    .scenario-type-custom { color: #6c757d; }
+
+    /* 確保所有文字元素在深色主題下可見 */
+    .card-title, h1, h2, h3, h4, h5, h6 {
+      color: var(--text-primary) !important;
+    }
+
+    .text-muted {
+      color: var(--text-secondary) !important;
+    }
+
+    .badge {
+      color: #fff !important;
+    }
+
+    .badge.bg-outline-primary {
+      color: var(--accent-color) !important;
+      border: 1px solid var(--accent-color);
+      background: transparent !important;
+    }
+
+    .badge.bg-secondary {
+      background: var(--text-secondary) !important;
+      color: #fff !important;
+    }
+
+    .small, small {
+      color: var(--text-secondary) !important;
+    }
+  </style>
+</head>
+<body>
+  <!-- 導航列 -->
+  <nav class="navbar navbar-dark navbar-expand-lg">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="#">
+        <i class="bi bi-activity me-2"></i>
+        綜合情境模擬器
+      </a>
+      <div class="navbar-nav ms-auto">
+        <button class="btn btn-outline-light me-2" id="load-config-btn">
+          <i class="bi bi-upload"></i> 載入配置
+        </button>
+        <button class="btn btn-outline-light me-2" id="save-config-btn">
+          <i class="bi bi-download"></i> 儲存配置
+        </button>
+        <button class="btn btn-warning" id="reset-all-btn">
+          <i class="bi bi-arrow-clockwise"></i> 重置
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="container-fluid">
+    <div class="row">
+      <!-- 側邊欄 -->
+      <div class="col-md-3 sidebar p-3">
+        <div class="nav flex-column nav-pills" id="simulation-nav">
+          <button class="nav-link active" id="nav-scenario" data-tab="scenario">
+            <i class="bi bi-compass me-2"></i>情境選擇
+          </button>
+          <button class="nav-link" id="nav-map" data-tab="map">
+            <i class="bi bi-map me-2"></i>地圖配置
+          </button>
+          <button class="nav-link" id="nav-agents" data-tab="agents">
+            <i class="bi bi-people me-2"></i>代理人設定
+          </button>
+          <button class="nav-link" id="nav-parameters" data-tab="parameters">
+            <i class="bi bi-gear me-2"></i>參數配置
+          </button>
+          <button class="nav-link" id="nav-simulation" data-tab="simulation">
+            <i class="bi bi-play-circle me-2"></i>模擬執行
+          </button>
+          <button class="nav-link" id="nav-results" data-tab="results">
+            <i class="bi bi-graph-up me-2"></i>結果分析
+          </button>
+        </div>
+      </div>
+
+      <!-- 主要內容區域 -->
+      <div class="col-md-9 p-4">
+        <!-- 情境選擇頁面 -->
+        <div id="tab-scenario" class="tab-content active">
+          <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-compass me-2"></i>選擇模擬情境</h2>
+            <button class="btn btn-primary" id="create-custom-scenario-btn">
+              <i class="bi bi-plus-circle me-2"></i>自訂情境
+            </button>
+          </div>
+
+          <div class="row g-4" id="scenario-grid">
+            <!-- 情境卡片將動態載入 -->
+          </div>
+
+          <div class="mt-4" id="scenario-description" style="display: none;">
+            <div class="card">
+              <div class="card-header">
+                <h5 id="selected-scenario-title">情境詳細資訊</h5>
+              </div>
+              <div class="card-body">
+                <p id="selected-scenario-description"></p>
+                <div class="d-flex justify-content-between">
+                  <div>
+                    <strong>複雜度：</strong><span id="scenario-complexity"></span>
+                  </div>
+                  <button class="btn btn-primary" id="next-to-map-btn">
+                    下一步：配置地圖 <i class="bi bi-arrow-right"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 地圖配置頁面 -->
+        <div id="tab-map" class="tab-content">
+          <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-map me-2"></i>地圖配置</h2>
+            <div>
+              <button class="btn btn-outline-secondary me-2" id="import-map-btn">
+                <i class="bi bi-upload me-2"></i>匯入地圖
+              </button>
+              <button class="btn btn-outline-secondary me-2" id="export-map-btn">
+                <i class="bi bi-download me-2"></i>匯出地圖
+              </button>
+              <button class="btn btn-primary" id="create-map-btn">
+                <i class="bi bi-plus-circle me-2"></i>新增房間
+              </button>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-8">
+              <div class="card">
+                <div class="card-header">
+                  <div class="d-flex justify-content-between">
+                    <span>地圖編輯器</span>
+                    <div class="btn-group btn-group-sm">
+                      <button class="btn btn-outline-secondary" id="zoom-in-btn">
+                        <i class="bi bi-zoom-in"></i>
+                      </button>
+                      <button class="btn btn-outline-secondary" id="zoom-out-btn">
+                        <i class="bi bi-zoom-out"></i>
+                      </button>
+                      <button class="btn btn-outline-secondary" id="reset-view-btn">
+                        <i class="bi bi-arrows-fullscreen"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div id="map-canvas" class="map-canvas">
+                    <div class="d-flex justify-content-center align-items-center h-100 text-muted">
+                      <div class="text-center">
+                        <i class="bi bi-map" style="font-size: 3rem;"></i>
+                        <p class="mt-2">點擊「新增房間」開始建立地圖</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="card">
+                <div class="card-header">房間清單</div>
+                <div class="card-body">
+                  <div id="room-list">
+                    <p class="text-muted">尚未建立任何房間</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card mt-3">
+                <div class="card-header">連接線工具</div>
+                <div class="card-body">
+                  <button class="btn btn-outline-primary w-100 mb-2" id="connect-rooms-btn">
+                    <i class="bi bi-arrow-left-right me-2"></i>連接房間
+                  </button>
+                  <button class="btn btn-outline-danger w-100" id="delete-connection-btn">
+                    <i class="bi bi-scissors me-2"></i>刪除連接
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between mt-4">
+            <button class="btn btn-secondary" id="back-to-scenario-btn">
+              <i class="bi bi-arrow-left me-2"></i>返回情境選擇
+            </button>
+            <button class="btn btn-primary" id="next-to-agents-btn">
+              下一步：設定代理人 <i class="bi bi-arrow-right"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- 代理人設定頁面 -->
+        <div id="tab-agents" class="tab-content">
+          <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-people me-2"></i>代理人設定</h2>
+            <button class="btn btn-primary" id="generate-agents-btn">
+              <i class="bi bi-person-plus me-2"></i>生成代理人
+            </button>
+          </div>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="config-section">
+                <h5>代理人數量配置</h5>
+                <div class="row">
+                  <div class="col-md-6">
+                    <label class="form-label">代理人總數</label>
+                    <input type="number" class="form-control" id="agent-count" value="10" min="1" max="100">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">初始位置</label>
+                    <select class="form-select" id="agent-spawn-location">
+                      <option value="random">隨機分佈</option>
+                      <option value="entrance">入口集中</option>
+                      <option value="specific">指定房間</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="config-section">
+                <h5>代理人類型分配</h5>
+                <div class="mb-3">
+                  <label class="form-label">成人比例 (%)</label>
+                  <input type="range" class="form-range" id="adult-ratio" min="0" max="100" value="70">
+                  <div class="d-flex justify-content-between text-small">
+                    <span>0%</span>
+                    <span id="adult-ratio-value">70%</span>
+                    <span>100%</span>
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">老年人比例 (%)</label>
+                  <input type="range" class="form-range" id="elderly-ratio" min="0" max="100" value="20">
+                  <div class="d-flex justify-content-between text-small">
+                    <span>0%</span>
+                    <span id="elderly-ratio-value">20%</span>
+                    <span>100%</span>
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">兒童比例 (%)</label>
+                  <input type="range" class="form-range" id="child-ratio" min="0" max="100" value="10">
+                  <div class="d-flex justify-content-between text-small">
+                    <span>0%</span>
+                    <span id="child-ratio-value">10%</span>
+                    <span>100%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-header">已生成的代理人</div>
+                <div class="card-body">
+                  <div class="agent-list" id="agent-list">
+                    <p class="text-muted">尚未生成代理人</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between mt-4">
+            <button class="btn btn-secondary" id="back-to-map-btn">
+              <i class="bi bi-arrow-left me-2"></i>返回地圖配置
+            </button>
+            <button class="btn btn-primary" id="next-to-parameters-btn">
+              下一步：參數配置 <i class="bi bi-arrow-right"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- 參數配置頁面 -->
+        <div id="tab-parameters" class="tab-content">
+          <h2 class="mb-4"><i class="bi bi-gear me-2"></i>參數配置</h2>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="parameter-group">
+                <h5>基本模擬參數</h5>
+                <div class="row">
+                  <div class="col-md-6">
+                    <label class="form-label">模擬時長（步數）</label>
+                    <input type="number" class="form-control" id="max-rounds" value="50" min="10" max="1000">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">模擬速度</label>
+                    <select class="form-select" id="simulation-speed">
+                      <option value="0.5">快速 (0.5x)</option>
+                      <option value="1" selected>正常 (1x)</option>
+                      <option value="2">慢速 (2x)</option>
+                      <option value="5">極慢 (5x)</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="mt-3">
+                  <label class="form-label">隨機種子</label>
+                  <input type="number" class="form-control" id="random-seed" placeholder="留空使用隨機種子">
+                </div>
+              </div>
+
+              <div class="parameter-group">
+                <h5>環境參數</h5>
+                <div class="row">
+                  <div class="col-md-6">
+                    <label class="form-label">初始溫度 (°C)</label>
+                    <input type="number" class="form-control" id="initial-temperature" value="25" min="-50" max="100">
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label">初始能見度 (%)</label>
+                    <input type="number" class="form-control" id="initial-visibility" value="100" min="0" max="100">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="parameter-group" id="scenario-specific-params">
+                <!-- 情境特定參數將動態載入 -->
+              </div>
+
+              <div class="parameter-group">
+                <h5>代理人行為參數</h5>
+                <div class="mb-3">
+                  <label class="form-label">恐慌擴散率</label>
+                  <input type="range" class="form-range" id="panic-spread-rate" min="0" max="1" step="0.1" value="0.3">
+                  <div class="d-flex justify-content-between text-small">
+                    <span>0.0</span>
+                    <span id="panic-spread-value">0.3</span>
+                    <span>1.0</span>
+                  </div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label">移動速度變異</label>
+                  <input type="range" class="form-range" id="speed-variation" min="0" max="1" step="0.1" value="0.2">
+                  <div class="d-flex justify-content-between text-small">
+                    <span>0.0</span>
+                    <span id="speed-variation-value">0.2</span>
+                    <span>1.0</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between mt-4">
+            <button class="btn btn-secondary" id="back-to-agents-btn">
+              <i class="bi bi-arrow-left me-2"></i>返回代理人設定
+            </button>
+            <button class="btn btn-success" id="start-simulation-btn">
+              <i class="bi bi-play-circle me-2"></i>開始模擬
+            </button>
+          </div>
+        </div>
+
+        <!-- 模擬執行頁面 -->
+        <div id="tab-simulation" class="tab-content">
+          <h2 class="mb-4"><i class="bi bi-play-circle me-2"></i>模擬執行</h2>
+
+          <div id="simulation-status" class="simulation-status" style="display: none;">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <h5 class="mb-1" id="simulation-status-title">模擬狀態</h5>
+                <p class="mb-0" id="simulation-status-text">準備中...</p>
+              </div>
+              <div class="d-flex gap-2">
+                <button class="btn btn-warning" id="pause-simulation-btn" style="display: none;">
+                  <i class="bi bi-pause-circle"></i> 暫停
+                </button>
+                <button class="btn btn-success" id="resume-simulation-btn" style="display: none;">
+                  <i class="bi bi-play-circle"></i> 繼續
+                </button>
+                <button class="btn btn-danger" id="stop-simulation-btn" style="display: none;">
+                  <i class="bi bi-stop-circle"></i> 停止
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="row">
+            <div class="col-md-8">
+              <div class="card">
+                <div class="card-header">
+                  <div class="d-flex justify-content-between">
+                    <span>即時模擬視圖</span>
+                    <div>
+                      <span class="badge bg-primary" id="current-tick">步數: 0</span>
+                      <span class="badge bg-info ms-2" id="simulation-time">時間: 00:00</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="card-body">
+                  <div id="simulation-canvas" class="map-canvas">
+                    <!-- 模擬視圖將在這裡渲染 -->
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-4">
+              <div class="stats-grid">
+                <div class="stat-card">
+                  <div class="stat-value" id="active-agents-count">0</div>
+                  <div class="text-muted">活躍代理人</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value" id="escaped-agents-count">0</div>
+                  <div class="text-muted">已逃生</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value" id="injured-agents-count">0</div>
+                  <div class="text-muted">受傷</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value" id="evacuation-rate">0%</div>
+                  <div class="text-muted">疏散率</div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="card-header">事件記錄</div>
+                <div class="card-body">
+                  <div class="log-container" id="event-log">
+                    <div class="log-entry info">模擬準備就緒</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 結果分析頁面 -->
+        <div id="tab-results" class="tab-content">
+          <h2 class="mb-4"><i class="bi bi-graph-up me-2"></i>結果分析</h2>
+
+          <div class="row">
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-header">模擬統計</div>
+                <div class="card-body">
+                  <div id="final-stats">
+                    <p class="text-muted">模擬完成後將顯示詳細統計</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card mt-3">
+                <div class="card-header">效能指標</div>
+                <div class="card-body">
+                  <div id="performance-metrics">
+                    <p class="text-muted">模擬完成後將顯示效能分析</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="card">
+                <div class="card-header">結果圖表</div>
+                <div class="card-body">
+                  <canvas id="results-chart" style="max-height: 400px;"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="d-flex justify-content-between mt-4">
+            <button class="btn btn-secondary" id="back-to-simulation-btn">
+              <i class="bi bi-arrow-left me-2"></i>返回模擬
+            </button>
+            <div>
+              <button class="btn btn-outline-primary me-2" id="export-results-btn">
+                <i class="bi bi-download me-2"></i>匯出結果
+              </button>
+              <button class="btn btn-primary" id="new-simulation-btn">
+                <i class="bi bi-plus-circle me-2"></i>新模擬
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 容器 -->
+  <div class="toast-container position-fixed top-0 end-0 p-3" id="toast-container"></div>
+
+  <!-- 房間編輯模態框 -->
+  <div class="modal fade" id="room-editor-modal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title">編輯房間</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <form id="room-form">
+            <div class="mb-3">
+              <label class="form-label">房間名稱</label>
+              <input type="text" class="form-control" id="room-name" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">房間類型</label>
+              <select class="form-select" id="room-type">
+                <option value="normal">一般房間</option>
+                <option value="office">辦公室</option>
+                <option value="corridor">走廊</option>
+                <option value="entrance">入口</option>
+                <option value="exit">出口</option>
+                <option value="stairway">樓梯間</option>
+                <option value="elevator">電梯</option>
+              </select>
+            </div>
+            <div class="row">
+              <div class="col-md-6">
+                <label class="form-label">容量</label>
+                <input type="number" class="form-control" id="room-capacity" value="10" min="1">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">大小</label>
+                <select class="form-select" id="room-size">
+                  <option value="small">小</option>
+                  <option value="medium" selected>中</option>
+                  <option value="large">大</option>
+                </select>
+              </div>
+            </div>
+            <div class="mt-3">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="room-is-exit">
+                <label class="form-check-label">設為出口</label>
+              </div>
+            </div>
+          </form>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="button" class="btn btn-danger" id="delete-room-btn" style="display: none;">刪除</button>
+          <button type="button" class="btn btn-primary" id="save-room-btn">儲存</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <script>
+    // 全域變數
+    let currentTab = 'scenario';
+    let selectedScenario = null;
+    let mapData = {
+      rooms: {},
+      connections: []
+    };
+    let agents = [];
+    let simulationConfig = {};
+    let simulationId = null;
+    let simulationStatus = 'idle';
+
+    // 初始化
+    document.addEventListener('DOMContentLoaded', function() {
+      initializeApp();
+      loadScenarios();
+      setupEventListeners();
+    });
+
+    function initializeApp() {
+      // 設置標籤頁切換
+      document.querySelectorAll('[data-tab]').forEach(button => {
+        button.addEventListener('click', function() {
+          const tab = this.dataset.tab;
+          switchTab(tab);
+        });
+      });
+
+      // 設置範圍輸入更新
+      setupRangeInputs();
+    }
+
+    function setupRangeInputs() {
+      const ranges = [
+        { input: 'adult-ratio', output: 'adult-ratio-value' },
+        { input: 'elderly-ratio', output: 'elderly-ratio-value' },
+        { input: 'child-ratio', output: 'child-ratio-value' },
+        { input: 'panic-spread-rate', output: 'panic-spread-value' },
+        { input: 'speed-variation', output: 'speed-variation-value' }
+      ];
+
+      ranges.forEach(range => {
+        const input = document.getElementById(range.input);
+        const output = document.getElementById(range.output);
+        if (input && output) {
+          input.addEventListener('input', function() {
+            output.textContent = this.value + (range.input.includes('ratio') ? '%' : '');
+          });
+        }
+      });
+    }
+
+    function setupEventListeners() {
+      // 情境選擇相關
+      document.getElementById('create-custom-scenario-btn')?.addEventListener('click', createCustomScenario);
+      document.getElementById('next-to-map-btn')?.addEventListener('click', () => switchTab('map'));
+
+      // 地圖配置相關
+      document.getElementById('create-map-btn')?.addEventListener('click', createRoom);
+      document.getElementById('back-to-scenario-btn')?.addEventListener('click', () => switchTab('scenario'));
+      document.getElementById('next-to-agents-btn')?.addEventListener('click', () => switchTab('agents'));
+
+      // 代理人設定相關
+      document.getElementById('generate-agents-btn')?.addEventListener('click', generateAgents);
+      document.getElementById('back-to-map-btn')?.addEventListener('click', () => switchTab('map'));
+      document.getElementById('next-to-parameters-btn')?.addEventListener('click', () => switchTab('parameters'));
+
+      // 參數配置相關
+      document.getElementById('back-to-agents-btn')?.addEventListener('click', () => switchTab('agents'));
+      document.getElementById('start-simulation-btn')?.addEventListener('click', startSimulation);
+
+      // 模擬控制相關
+      document.getElementById('pause-simulation-btn')?.addEventListener('click', pauseSimulation);
+      document.getElementById('resume-simulation-btn')?.addEventListener('click', resumeSimulation);
+      document.getElementById('stop-simulation-btn')?.addEventListener('click', stopSimulation);
+
+      // 結果分析相關
+      document.getElementById('back-to-simulation-btn')?.addEventListener('click', () => switchTab('simulation'));
+      document.getElementById('export-results-btn')?.addEventListener('click', exportResults);
+      document.getElementById('new-simulation-btn')?.addEventListener('click', newSimulation);
+
+      // 房間編輯
+      document.getElementById('save-room-btn')?.addEventListener('click', saveRoom);
+      document.getElementById('delete-room-btn')?.addEventListener('click', deleteRoom);
+
+      // 工具列
+      document.getElementById('load-config-btn')?.addEventListener('click', loadConfig);
+      document.getElementById('save-config-btn')?.addEventListener('click', saveConfig);
+      document.getElementById('reset-all-btn')?.addEventListener('click', resetAll);
+    }
+
+    function switchTab(tabName) {
+      // 隱藏所有標籤頁內容
+      document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.style.display = 'none';
+        tab.classList.remove('active');
+      });
+
+      // 顯示選中的標籤頁
+      const targetTab = document.getElementById(`tab-${tabName}`);
+      if (targetTab) {
+        targetTab.style.display = 'block';
+        targetTab.classList.add('active');
+      }
+
+      // 更新導航樣式
+      document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active');
+      });
+      document.getElementById(`nav-${tabName}`)?.classList.add('active');
+
+      currentTab = tabName;
+    }
+
+    function loadScenarios() {
+      const scenarios = [
+        {
+          id: 'fire',
+          name: '火災情境',
+          icon: 'bi-fire',
+          iconClass: 'scenario-type-fire',
+          description: '建築物內火災蔓延與人員疏散模擬',
+          complexity: '中等',
+          features: ['火勢蔓延', '煙霧擴散', '結構損壞', '緊急疏散']
+        },
+        {
+          id: 'earthquake',
+          name: '地震情境',
+          icon: 'bi-lightning-charge',
+          iconClass: 'scenario-type-earthquake',
+          description: '地震發生時的建築物搖晃與人員避難',
+          complexity: '高',
+          features: ['地震波動', '建築搖晃', '物品掉落', '避難行為']
+        },
+        {
+          id: 'flood',
+          name: '水災情境',
+          icon: 'bi-droplet-fill',
+          iconClass: 'scenario-type-flood',
+          description: '洪水淹沒區域的人員撤離模擬',
+          complexity: '中等',
+          features: ['水位上升', '區域淹沒', '交通阻斷', '高地避難']
+        },
+        {
+          id: 'power_outage',
+          name: '停電情境',
+          icon: 'bi-lightning-fill',
+          iconClass: 'scenario-type-power-outage',
+          description: '大規模停電時的人員行為與應對',
+          complexity: '低',
+          features: ['照明中斷', '電梯停擺', '通訊受限', '緊急照明']
+        },
+        {
+          id: 'terror_attack',
+          name: '恐攻情境',
+          icon: 'bi-exclamation-triangle-fill',
+          iconClass: 'scenario-type-terror-attack',
+          description: '恐怖攻擊事件的人員疏散與應對',
+          complexity: '高',
+          features: ['威脅來源', '恐慌傳播', '封鎖區域', '安全疏散']
+        },
+        {
+          id: 'pandemic',
+          name: '疫情情境',
+          icon: 'bi-virus',
+          iconClass: 'scenario-type-pandemic',
+          description: '傳染病擴散的人員流動控制模擬',
+          complexity: '高',
+          features: ['病毒傳播', '隔離措施', '社交距離', '檢疫流程']
+        }
+      ];
+
+      const grid = document.getElementById('scenario-grid');
+      grid.innerHTML = '';
+
+      scenarios.forEach(scenario => {
+        const card = createScenarioCard(scenario);
+        grid.appendChild(card);
+      });
+    }
+
+    function createScenarioCard(scenario) {
+      const col = document.createElement('div');
+      col.className = 'col-md-4';
+
+      col.innerHTML = `
+        <div class="card scenario-card" data-scenario-id="${scenario.id}">
+          <div class="card-body text-center">
+            <i class="bi ${scenario.icon} scenario-icon ${scenario.iconClass}"></i>
+            <h5 class="card-title">${scenario.name}</h5>
+            <p class="card-text text-muted">${scenario.description}</p>
+            <div class="mb-3">
+              <span class="badge bg-secondary">複雜度: ${scenario.complexity}</span>
+            </div>
+            <div class="d-flex flex-wrap gap-1 justify-content-center">
+              ${scenario.features.map(feature => `
+                <span class="badge bg-outline-primary">${feature}</span>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+
+      const card = col.querySelector('.scenario-card');
+      card.addEventListener('click', () => selectScenario(scenario));
+
+      return col;
+    }
+
+    function selectScenario(scenario) {
+      // 移除其他卡片的選中狀態
+      document.querySelectorAll('.scenario-card').forEach(card => {
+        card.classList.remove('selected');
+      });
+
+      // 選中當前卡片
+      document.querySelector(`[data-scenario-id="${scenario.id}"]`).classList.add('selected');
+
+      // 更新詳細資訊
+      selectedScenario = scenario;
+      document.getElementById('selected-scenario-title').textContent = scenario.name;
+      document.getElementById('selected-scenario-description').textContent = scenario.description;
+      document.getElementById('scenario-complexity').textContent = scenario.complexity;
+
+      // 顯示詳細資訊區域
+      document.getElementById('scenario-description').style.display = 'block';
+
+      showToast(`已選擇 ${scenario.name}`, 'success');
+    }
+
+    function createCustomScenario() {
+      showToast('自訂情境功能開發中', 'info');
+    }
+
+    function createRoom() {
+      // 清空表單
+      document.getElementById('room-form').reset();
+      document.getElementById('delete-room-btn').style.display = 'none';
+      
+      // 顯示模態框
+      const modal = new bootstrap.Modal(document.getElementById('room-editor-modal'));
+      modal.show();
+    }
+
+    function saveRoom() {
+      const form = document.getElementById('room-form');
+      const formData = new FormData(form);
+      
+      const roomData = {
+        id: Date.now().toString(),
+        name: document.getElementById('room-name').value,
+        type: document.getElementById('room-type').value,
+        capacity: parseInt(document.getElementById('room-capacity').value),
+        size: document.getElementById('room-size').value,
+        isExit: document.getElementById('room-is-exit').checked,
+        position: { x: Math.random() * 600 + 50, y: Math.random() * 300 + 50 }
+      };
+
+      mapData.rooms[roomData.id] = roomData;
+      renderMap();
+      updateRoomList();
+
+      bootstrap.Modal.getInstance(document.getElementById('room-editor-modal')).hide();
+      showToast(`房間 "${roomData.name}" 已建立`, 'success');
+    }
+
+    function deleteRoom() {
+      // 實作房間刪除邏輯
+      showToast('房間已刪除', 'warning');
+    }
+
+    function renderMap() {
+      const canvas = document.getElementById('map-canvas');
+      canvas.innerHTML = '';
+
+      // 渲染房間
+      Object.values(mapData.rooms).forEach(room => {
+        const roomElement = createRoomElement(room);
+        canvas.appendChild(roomElement);
+      });
+
+      // 渲染連接線
+      mapData.connections.forEach(connection => {
+        const lineElement = createConnectionElement(connection);
+        canvas.appendChild(lineElement);
+      });
+    }
+
+    function createRoomElement(room) {
+      const element = document.createElement('div');
+      element.className = 'room-node';
+      element.style.left = room.position.x + 'px';
+      element.style.top = room.position.y + 'px';
+      element.textContent = room.name;
+      element.dataset.roomId = room.id;
+
+      if (room.isExit) {
+        element.classList.add('exit');
+      }
+
+      return element;
+    }
+
+    function createConnectionElement(connection) {
+      // 實作連接線渲染
+      const element = document.createElement('div');
+      element.className = 'connection-line';
+      return element;
+    }
+
+    function updateRoomList() {
+      const roomList = document.getElementById('room-list');
+      const rooms = Object.values(mapData.rooms);
+
+      if (rooms.length === 0) {
+        roomList.innerHTML = '<p class="text-muted">尚未建立任何房間</p>';
+        return;
+      }
+
+      roomList.innerHTML = rooms.map(room => `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <strong>${room.name}</strong>
+            <br>
+            <small class="text-muted">${room.type} | 容量: ${room.capacity}</small>
+          </div>
+          <button class="btn btn-sm btn-outline-primary" onclick="editRoom('${room.id}')">
+            <i class="bi bi-pencil"></i>
+          </button>
+        </div>
+      `).join('');
+    }
+
+    function generateAgents() {
+      const count = parseInt(document.getElementById('agent-count').value);
+      const spawnLocation = document.getElementById('agent-spawn-location').value;
+
+      // 模擬生成代理人
+      agents = [];
+      for (let i = 0; i < count; i++) {
+        agents.push({
+          id: `agent_${i}`,
+          name: `代理人 ${i + 1}`,
+          type: getRandomAgentType(),
+          health: 100,
+          location: getRandomLocation(),
+          traits: getRandomTraits()
+        });
+      }
+
+      updateAgentList();
+      showToast(`已生成 ${count} 個代理人`, 'success');
+    }
+
+    function getRandomAgentType() {
+      const types = ['成人', '老年人', '兒童'];
+      return types[Math.floor(Math.random() * types.length)];
+    }
+
+    function getRandomLocation() {
+      const rooms = Object.keys(mapData.rooms);
+      return rooms.length > 0 ? rooms[Math.floor(Math.random() * rooms.length)] : 'entrance';
+    }
+
+    function getRandomTraits() {
+      const allTraits = ['冷靜', '容易恐慌', '領導能力', '體力好', '行動緩慢', '熟悉環境'];
+      const count = Math.floor(Math.random() * 3) + 1;
+      return allTraits.sort(() => 0.5 - Math.random()).slice(0, count);
+    }
+
+    function updateAgentList() {
+      const agentList = document.getElementById('agent-list');
+      
+      if (agents.length === 0) {
+        agentList.innerHTML = '<p class="text-muted">尚未生成代理人</p>';
+        return;
+      }
+
+      agentList.innerHTML = agents.map(agent => `
+        <div class="agent-card">
+          <div class="d-flex justify-content-between">
+            <div>
+              <strong>${agent.name}</strong>
+              <span class="badge bg-secondary ms-2">${agent.type}</span>
+            </div>
+            <div class="text-end">
+              <small class="text-muted">位置: ${agent.location}</small>
+            </div>
+          </div>
+          <div class="mt-1">
+            <small class="text-muted">特質: ${agent.traits.join(', ')}</small>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function startSimulation() {
+      if (!selectedScenario) {
+        showToast('請先選擇模擬情境', 'warning');
+        return;
+      }
+
+      if (Object.keys(mapData.rooms).length === 0) {
+        showToast('請先建立地圖', 'warning');
+        return;
+      }
+
+      if (agents.length === 0) {
+        showToast('請先生成代理人', 'warning');
+        return;
+      }
+
+      // 收集模擬配置
+      simulationConfig = {
+        scenario: selectedScenario.id,
+        map: mapData,
+        agents: agents,
+        parameters: {
+          maxRounds: parseInt(document.getElementById('max-rounds').value),
+          speed: parseFloat(document.getElementById('simulation-speed').value),
+          randomSeed: document.getElementById('random-seed').value || null,
+          initialTemperature: parseInt(document.getElementById('initial-temperature').value),
+          initialVisibility: parseInt(document.getElementById('initial-visibility').value),
+          panicSpreadRate: parseFloat(document.getElementById('panic-spread-rate').value),
+          speedVariation: parseFloat(document.getElementById('speed-variation').value)
+        }
+      };
+
+      // 切換到模擬頁面
+      switchTab('simulation');
+
+      // 開始模擬
+      runSimulation();
+    }
+
+    async function runSimulation() {
+      try {
+        simulationStatus = 'running';
+        updateSimulationStatus('running', '模擬執行中...');
+
+        // 這裡應該調用後端API開始模擬
+        // const response = await fetch('/api/start-simulation', { ... });
+        
+        // 模擬假資料
+        simulateStep();
+        
+      } catch (error) {
+        console.error('模擬啟動失敗:', error);
+        showToast('模擬啟動失敗', 'danger');
+        simulationStatus = 'error';
+        updateSimulationStatus('error', '模擬發生錯誤');
+      }
+    }
+
+    function simulateStep() {
+      if (simulationStatus !== 'running') return;
+
+      // 模擬一步
+      const tick = parseInt(document.getElementById('current-tick').textContent.split(': ')[1] || '0') + 1;
+      document.getElementById('current-tick').textContent = `步數: ${tick}`;
+
+      // 模擬時間
+      const minutes = Math.floor(tick / 60);
+      const seconds = tick % 60;
+      document.getElementById('simulation-time').textContent = 
+        `時間: ${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+      // 更新統計
+      const activeCount = Math.max(0, agents.length - Math.floor(tick / 10));
+      const escapedCount = Math.floor(tick / 10);
+      const injuredCount = Math.floor(tick / 20);
+
+      document.getElementById('active-agents-count').textContent = activeCount;
+      document.getElementById('escaped-agents-count').textContent = escapedCount;
+      document.getElementById('injured-agents-count').textContent = injuredCount;
+      document.getElementById('evacuation-rate').textContent = 
+        Math.round((escapedCount / agents.length) * 100) + '%';
+
+      // 添加事件記錄
+      if (tick % 5 === 0) {
+        addEventLog(`步數 ${tick}: 模擬持續進行中`, 'info');
+      }
+
+      // 檢查結束條件
+      if (tick >= simulationConfig.parameters.maxRounds || activeCount === 0) {
+        completeSimulation();
+        return;
+      }
+
+      // 繼續下一步
+      setTimeout(simulateStep, simulationConfig.parameters.speed * 1000);
+    }
+
+    function completeSimulation() {
+      simulationStatus = 'completed';
+      updateSimulationStatus('completed', '模擬已完成');
+      addEventLog('模擬結束', 'success');
+      
+      // 切換到結果頁面
+      setTimeout(() => {
+        switchTab('results');
+        generateResults();
+      }, 2000);
+    }
+
+    function generateResults() {
+      const escaped = parseInt(document.getElementById('escaped-agents-count').textContent);
+      const injured = parseInt(document.getElementById('injured-agents-count').textContent);
+      const total = agents.length;
+
+      const stats = `
+        <div class="row text-center">
+          <div class="col-md-4">
+            <h3 class="text-success">${escaped}</h3>
+            <p>成功逃生</p>
+          </div>
+          <div class="col-md-4">
+            <h3 class="text-warning">${injured}</h3>
+            <p>受傷人數</p>
+          </div>
+          <div class="col-md-4">
+            <h3 class="text-primary">${Math.round((escaped/total)*100)}%</h3>
+            <p>逃生率</p>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('final-stats').innerHTML = stats;
+
+      // 生成圖表
+      generateChart();
+    }
+
+    function generateChart() {
+      const ctx = document.getElementById('results-chart').getContext('2d');
+      new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['已逃生', '受傷', '其他'],
+          datasets: [{
+            data: [
+              parseInt(document.getElementById('escaped-agents-count').textContent),
+              parseInt(document.getElementById('injured-agents-count').textContent),
+              parseInt(document.getElementById('active-agents-count').textContent)
+            ],
+            backgroundColor: ['#28a745', '#ffc107', '#6c757d']
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false
+        }
+      });
+    }
+
+    function updateSimulationStatus(status, message) {
+      const statusElement = document.getElementById('simulation-status');
+      const titleElement = document.getElementById('simulation-status-title');
+      const textElement = document.getElementById('simulation-status-text');
+
+      statusElement.className = `simulation-status ${status}`;
+      statusElement.style.display = 'block';
+      
+      titleElement.textContent = getStatusTitle(status);
+      textElement.textContent = message;
+
+      // 更新控制按鈕
+      document.getElementById('pause-simulation-btn').style.display = 
+        status === 'running' ? 'inline-block' : 'none';
+      document.getElementById('resume-simulation-btn').style.display = 
+        status === 'paused' ? 'inline-block' : 'none';
+      document.getElementById('stop-simulation-btn').style.display = 
+        ['running', 'paused'].includes(status) ? 'inline-block' : 'none';
+    }
+
+    function getStatusTitle(status) {
+      const titles = {
+        'running': '模擬執行中',
+        'paused': '模擬已暫停',
+        'completed': '模擬已完成',
+        'error': '模擬錯誤',
+        'stopped': '模擬已停止'
+      };
+      return titles[status] || '未知狀態';
+    }
+
+    function addEventLog(message, type = 'info') {
+      const logContainer = document.getElementById('event-log');
+      const timestamp = new Date().toLocaleTimeString();
+      
+      const logEntry = document.createElement('div');
+      logEntry.className = `log-entry ${type}`;
+      logEntry.textContent = `[${timestamp}] ${message}`;
+      
+      logContainer.appendChild(logEntry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    function pauseSimulation() {
+      simulationStatus = 'paused';
+      updateSimulationStatus('paused', '模擬已暫停');
+      addEventLog('模擬暫停', 'warning');
+    }
+
+    function resumeSimulation() {
+      simulationStatus = 'running';
+      updateSimulationStatus('running', '模擬繼續執行');
+      addEventLog('模擬繼續', 'info');
+      simulateStep();
+    }
+
+    function stopSimulation() {
+      simulationStatus = 'stopped';
+      updateSimulationStatus('stopped', '模擬已停止');
+      addEventLog('模擬停止', 'error');
+    }
+
+    function exportResults() {
+      const results = {
+        scenario: selectedScenario,
+        configuration: simulationConfig,
+        results: {
+          escaped: parseInt(document.getElementById('escaped-agents-count').textContent),
+          injured: parseInt(document.getElementById('injured-agents-count').textContent),
+          total: agents.length
+        }
+      };
+
+      const blob = new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `simulation_results_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      
+      showToast('結果已匯出', 'success');
+    }
+
+    function newSimulation() {
+      if (confirm('確定要開始新的模擬嗎？這將清除目前的設定。')) {
+        resetAll();
+        switchTab('scenario');
+      }
+    }
+
+    function loadConfig() {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.onchange = function(e) {
+        const file = e.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function(e) {
+            try {
+              const config = JSON.parse(e.target.result);
+              // 載入配置邏輯
+              showToast('配置已載入', 'success');
+            } catch (error) {
+              showToast('配置檔案格式錯誤', 'danger');
+            }
+          };
+          reader.readAsText(file);
+        }
+      };
+      input.click();
+    }
+
+    function saveConfig() {
+      const config = {
+        scenario: selectedScenario,
+        map: mapData,
+        agents: agents,
+        parameters: simulationConfig.parameters
+      };
+
+      const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `simulation_config_${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      
+      showToast('配置已儲存', 'success');
+    }
+
+    function resetAll() {
+      selectedScenario = null;
+      mapData = { rooms: {}, connections: [] };
+      agents = [];
+      simulationConfig = {};
+      simulationId = null;
+      simulationStatus = 'idle';
+
+      // 清除UI
+      document.querySelectorAll('.scenario-card').forEach(card => {
+        card.classList.remove('selected');
+      });
+      document.getElementById('scenario-description').style.display = 'none';
+      document.getElementById('map-canvas').innerHTML = '';
+      updateRoomList();
+      updateAgentList();
+
+      showToast('已重置所有設定', 'info');
+    }
+
+    function showToast(message, type = 'info') {
+      const toastContainer = document.getElementById('toast-container');
+      const toastId = `toast-${Date.now()}`;
+      
+      const toastHtml = `
+        <div id="${toastId}" class="toast" role="alert">
+          <div class="toast-header">
+            <strong class="me-auto">系統通知</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+          </div>
+          <div class="toast-body bg-${type === 'danger' ? 'danger' : type === 'warning' ? 'warning' : type === 'success' ? 'success' : 'info'} text-white">
+            ${message}
+          </div>
+        </div>
+      `;
+      
+      toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+      const toastElement = document.getElementById(toastId);
+      const toast = new bootstrap.Toast(toastElement, { delay: 3000 });
+      toast.show();
+      
+      toastElement.addEventListener('hidden.bs.toast', () => {
+        toastElement.remove();
+      });
+    }
+
+    // 全域函數
+    window.editRoom = function(roomId) {
+      // 實作房間編輯
+      showToast('房間編輯功能開發中', 'info');
+    };
+  </script>
+</body>
+</html> 
