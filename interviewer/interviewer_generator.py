@@ -153,11 +153,9 @@ class Interviewer(LLM_responder):
             if persona_data:
                 from module.prompt_loader import get_user_prompt
                 
-                question_batch_prompt = get_user_prompt("batch_interview_questions")
-                
                 # 將當前批次的問題加入 prompt
                 questions_text = "\n".join(batch_question_contents)
-                question_batch_prompt += questions_text
+                question_batch_prompt = get_user_prompt("batch_interview_questions", questions=questions_text)
                 
                 print("正在生成回答...")
 
@@ -217,7 +215,7 @@ class Interviewer(LLM_responder):
         qa_pairs = []
         current_context = ""
         # ==============================
-        from module.prompt_loader import get_system_prompt, get_user_prompt
+        from module.prompt_loader import get_system_prompt, get_user_prompt, get_prompt
         
         sys_prompt = get_system_prompt("dynamic_interview_generator")
         prompt_data = get_prompt("dynamic_interview_generator", static_interview_data=static_interview_data)
@@ -237,7 +235,6 @@ class Interviewer(LLM_responder):
             sys_prompt = f"你現在是\n {json.dumps(persona_data, ensure_ascii=False)}"
 
             # 使用角色回答問題
-            from module.prompt_loader import get_prompt
             prompt_data = get_prompt("dynamic_interview_generator", current_question=current_question)
             question_batch_prompt = prompt_data["single_response_template"]
             
@@ -256,7 +253,6 @@ class Interviewer(LLM_responder):
                 current_context += f"Q：{current_question}\nA：{current_answer}\n\n"
                 
                 # 使用 MINI_MODEL 產生下一個問題
-                from module.prompt_loader import get_prompt
                 next_q_prompts = get_prompt("dynamic_interview_generator", current_context=current_context)
                 sys_prompt = next_q_prompts["next_question_system"]
                 ask_prompt = next_q_prompts["next_question_template"]

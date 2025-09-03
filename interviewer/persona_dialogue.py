@@ -15,12 +15,20 @@ class PersonaDialogueManager:
         self.conversation_history_path = "conversation_history"
         os.makedirs(self.conversation_history_path, exist_ok=True)
         self.chatbot = None
+        self._initialization_lock = None
 
     async def initialize(self):
-        """初始化聊天處理器"""
-        if not self.chatbot:
-            self.chatbot = ChatWith()
-            await self.chatbot.wait_until_ready()
+        """初始化聊天處理器（線程安全）"""
+        if self._initialization_lock is None:
+            import asyncio
+            self._initialization_lock = asyncio.Lock()
+        
+        async with self._initialization_lock:
+            if not self.chatbot:
+                logger.info("正在初始化 PersonaDialogueManager 的 ChatWith 實例...")
+                self.chatbot = ChatWith()
+                await self.chatbot.wait_until_ready()
+                logger.info(f"PersonaDialogueManager 初始化完成，載入了 {len(self.chatbot.persona_loader_obj.personas)} 個 persona")
 
     async def load_dialogue_history(self, session_id: str) -> List[Dict[str, str]]:
         """載入對話歷史"""
@@ -107,6 +115,13 @@ class PersonaDialogueManager:
     ) -> Tuple[List[Dict[str, str]], str]:
         """執行兩個 persona 之間的對話"""
         await self.initialize()
+        
+        # 驗證 persona 是否存在
+        if persona1_id not in self.chatbot.persona_loader_obj.personas:
+            raise KeyError(f"Persona {persona1_id} 不存在於已載入的資料中。可用的 persona IDs: {list(self.chatbot.persona_loader_obj.personas.keys())}")
+        
+        if persona2_id not in self.chatbot.persona_loader_obj.personas:
+            raise KeyError(f"Persona {persona2_id} 不存在於已載入的資料中。可用的 persona IDs: {list(self.chatbot.persona_loader_obj.personas.keys())}")
         
         # 獲取或創建會話 ID
         if not session_id:

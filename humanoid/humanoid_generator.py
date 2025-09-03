@@ -9,7 +9,7 @@ import aiofiles
 import time
 
 # ========================================================================================
-NUM_GENERATE = 5 # 大於5將會觸發rate limit
+NUM_GENERATE = 3 # 大於5將會觸發rate limit
 # ========================================================================================
 
 class BaseInfoGenerator:
@@ -113,12 +113,10 @@ class ToneGenerator(LLM_responder):
         from module.prompt_loader import get_system_prompt, get_user_prompt
         
         sys_prompt = get_system_prompt("tone_generator")
-        user_prompt_template = get_user_prompt("tone_generator", character_data=json.dumps(full_character_data, ensure_ascii=False))
-        from module.prompt_loader import get_prompt
-        usr = get_prompt("tone_generator")["user"]
+        user_prompt = get_user_prompt("tone_generator", character_data=json.dumps(full_character_data, ensure_ascii=False))
         
         # 發送 API 請求
-        response = await self.full_chat_gpt_4o(sys_prompt + "\n" + user_prompt_template, usr, 0.7)
+        response = await self.full_chat_gpt_4o(sys_prompt, user_prompt, 0.7)
         
         return response
     

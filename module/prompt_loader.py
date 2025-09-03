@@ -20,14 +20,14 @@ class PromptLoader:
 "Centered portrait with full head visible, not cropped, ample space above the head. Upper body in frame, symmetrical composition. A professional medium close up headshot of [描述], white background, neutral lighting, studio style, passport photo, high resolution"
 
 範例輸入：
-{
+{{
 "姓名": "林書豪",
 "年紀": 35,
 "性別": "男",
 "出生地": "台北",
 "人格特質": ["溫柔", "熱情"],
 "語言行為": "說話幽默、善於激勵人心"
-}
+}}
 範例輸出：
 "a professional headshot of a mid-aged Asian man with a warm smile and confident posture, neat hairstyle, clean shave, wearing a light blue shirt and blazer, looking directly at the camera, white background, neutral lighting, studio style, passport photo, high resolution"
 """,
@@ -47,7 +47,7 @@ class PromptLoader:
             },
             
             "batch_interview_questions": {
-                "prompt_template": """回答每一題訪談問題，並嚴格遵守輸出格式。
+                "user_template": """回答每一題訪談問題，並嚴格遵守輸出格式。
 
 【輸入】：
 1. 描述您童年最難忘的回憶。
@@ -58,24 +58,24 @@ class PromptLoader:
 
 【輸出】：(不包含此行)
 [
-{
+{{
 "問題": "描述您童年最難忘的回憶。",
 "回答": "在我童年的記憶中，最難忘的莫過於在雲林鄉間田野裡的日子。父母經營著一片竹筍田，每到收成季節，我就會跟著父親一起下田。雖然一身泥濘，卻感受到一家人為生活齊心努力的溫暖。我還記得黃昏時分，母親會在田邊等著我們回家，那份簡單卻踏實的幸福至今仍令我懷念。這些經歷讓我體會到勤勞與家庭的重要，而純樸的鄉村環境，也塑造了我知足常樂的心態。"
-},
-{
+}},
+{{
 "問題": "您認為哪些個人特質對您的成長影響最大？",
 "回答": "我認為善於調適和進取精神對我的成長影響很大。從小家境並不優渥，生活中常常需要面對各種大大小小的困難。但我總是抱持著積極的態度快速適應不同情境，並勇於挑戰自己的極限。此外，由於性格偏內向，我學會了觀察與傾聽，也因此能在小團體裡發揮影響力。這種穩健而進取的特質，成為我日後無論在學業、職場還是家庭生活中最大的助力。"
-},
-{
-"問題": "您認為哪些個人特質對您的成長影響最大？",
+}},
+{{
+"問題": "談談您在學生時代最具挑戰的一件事。",
 "回答": "在雲林高中的時候，我參加了模擬聯合國會議。對一個內向的學生而言，要在眾人面前表達想法與辯論非常不容易。但這卻讓我開始正視並突破自己的侷限。當時我花了很多時間準備，也花心思理解各國立場與利益，最終順利完成多場談判與協議。這段經驗不僅磨練了我的談判技巧，也讓我更有自信面對各種未知的挑戰，進而點燃了我對國際事務的熱情。"
-}
+}}
 ]
 
 ---
 
-訪問題目是:""",
-                "questions_template": "{questions}"
+訪問題目是:
+{questions}"""
             },
             
             "dynamic_interview_generator": {
@@ -273,6 +273,8 @@ top_p// 從 0.1 到 1.0 的值，根據內容的多樣性需求決定
 需要仔細衡量人格的背景，年齡和人生經歷須符合，回答的內容講求台灣的真實歷史性，不要產生不一致或不合邏輯的資料。
 仔細評估人格的語氣，情緒可以有點起伏，不要過度的正向，維持上下文的情緒。如果沒有上下文就維持平平的，無需過度開心或是憤怒。
 回應要保持連貫性，記住前面的對話內容，讓整個對話流程自然。
+
+**重要：請保持回應簡潔，每次回應限制在30-50字以內，用自然的來回對話方式表達，避免冗長的敘述。**
 """
             }
         }

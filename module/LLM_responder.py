@@ -1,7 +1,7 @@
 # LLM_responder.py
 import os
+import json
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
 from typing import List, Dict
 import numpy as np
 from deprecated import deprecated
@@ -10,42 +10,49 @@ import time
 import aiohttp
 from PIL import Image
 from io import BytesIO
-import os
-load_dotenv()
 
-# ======= CONFIG =======
-EMBEDDING_MODEL = "text-embedding-ada-002"
-CHAT_MODEL_4O = "gpt-4o"
-CHAT_MODEL_41 = "gpt-4.1"
-MINI_MODEL = "gpt-4.1-mini"
-NANO_MODEL = "gpt-4.1-nano"
-PHOTO_MODEL = "dall-e-3" # 只提供url要自己再request
-OLD_PHOTO_MODEL = "dall-e-2" # 會自己回傳 但是產生的細節會遺漏
+# 導入新的封裝模組
+from .responder_wrapper import (
+    ResponderWrapper, 
+    create_openai_wrapper, 
+    create_ollama_wrapper,
+    EMBEDDING_MODEL, CHAT_MODEL_4O, CHAT_MODEL_41, 
+    MINI_MODEL, NANO_MODEL, PHOTO_MODEL, OLD_PHOTO_MODEL
+)
+
+load_dotenv()
 
 class LLM_responder:
     """LLM api 物件"""  
 
-    def __init__(self, api_key=None):
-        """LLM api建構子"""   
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
-        if not self.api_key:
-            raise ValueError("需要設定 OPENAI_API_KEY 環境變數或直接傳入 API 金鑰")
+    def __init__(self, api_key=None, use_ollama=False):
+        """LLM api建構子
         
-        # 初始化 OpenAI 客戶端
-        self.client = AsyncOpenAI(api_key=self.api_key)
+        Args:
+            api_key: OpenAI API 金鑰
+            use_ollama: 是否使用 Ollama 本地模型（預設 True）
+        """   
+        # 使用新的封裝模組
+        if use_ollama:
+            self.wrapper = create_ollama_wrapper(api_key)
+        else:
+            self.wrapper = create_openai_wrapper(api_key)
+        
+        # 保持向後兼容
+        self.use_ollama = use_ollama
+        self.client = self.wrapper.client
 
     async def __call_completions_openai_api(self, model, messages, temperature = 0.7, top_p = 1):
-        """使用 OpenAI 套件呼叫 chat.completions API"""
+        """使用封裝模組呼叫 chat.completions API"""
         try:
-            # 使用 OpenAI 客戶端發送請求
-            response = await self.client.chat.completions.create(
-                model=model,
+            # 使用新的封裝模組進行請求
+            response = await self.wrapper.chat_completion(
                 messages=messages,
+                model=model,
                 temperature=temperature,
-                top_p = top_p
+                top_p=top_p
             )
             
-            # 從回應中提取內容
             return response
         except Exception as e:
             raise Exception(f"API 請求失敗: {str(e)}")
@@ -53,35 +60,48 @@ class LLM_responder:
     async def __call_images_openai_api(self, model, prompt: str, output_path: str, photo_size) -> None:
         """reification過的prompt轉圖片並下載
         https://platform.openai.com/docs/api-reference/images/create
+        
+        注意：圖片生成永遠使用 OpenAI，因為 Ollama 不支援圖片生成
         """
-        response = await self.client.images.generate(
-            prompt=prompt,
-            n=1,
-            size=photo_size,
-            model=model,
-            quality = "standard",
-        )
-
-        image_url = response.data[0].url
-        if not image_url:
-            raise Exception("圖片 URL 為空，無法下載圖片")
         try:
+            # 使用新的封裝模組進行圖片生成
+            response = await self.wrapper.generate_image(
+                prompt=prompt,
+                model=model,
+                size=photo_size,
+                quality="standard",
+                n=1
+            )
+            
+            image_url = response.data[0].url
+            if not image_url:
+                raise Exception("圖片 URL 為空，無法下載圖片")
+            
             await self.download_and_convert_to_jpg_async(image_url, output_path)
         except Exception as e:
             print(f"下載並轉換圖片時發生錯誤:{e}")
 
     async def __call_embeddings_openai_api(self, docs, model: str = EMBEDDING_MODEL):
-        """使用 OpenAI 套件呼叫 embeddings.create API"""
-        respond = await self.client.embeddings.create(
-            input=docs,
-            model=model
-        )
-        return respond
+        """使用封裝模組呼叫 embeddings.create API
+        
+        注意：Embedding 永遠使用 OpenAI，因為 Ollama 的 embedding 格式可能不同
+        """
+        try:
+            # 使用新的封裝模組進行嵌入生成
+            response = await self.wrapper.generate_embeddings(
+                texts=docs,
+                model=model
+            )
+            return response
+        except Exception as e:
+            raise Exception(f"Embedding 生成失敗: {str(e)}")
     
     #================================================================================================================
 
     async def full_chat_gpt_4o(self, sys_prompt: str="", usr_prompt: str="", temperature: float=0.7, top_p: int=1)->str:
         """使用 chat.completions API透過gpt-4o的自定義回答"單輪"對話
+        
+        注意：當 use_ollama=True 時，會自動切換到本地 Ollama 模型
 
         usage: full_chat_gpt_4o("你是數學教學小助手，不可以誤人子弟亂回答，要教給五歲小孩聽的", "回答一個題目是: 1+1=多少?", 0.3)"""
         model = CHAT_MODEL_4O
@@ -95,6 +115,8 @@ class LLM_responder:
     async def full_chat_gpt_41(self, sys_prompt: str="", usr_prompt: str="", temperature: float=0.7, top_p: int=1)->str:
         """gpt4.1比較會遵守格式
         使用 chat.completions API透過gpt-4.1的自定義回答"單輪"對話
+        
+        注意：當 use_ollama=True 時，會自動切換到本地 Ollama 模型
 
         usage: full_chat_gpt_41("你是數學教學小助手，不可以誤人子弟亂回答，要教給五歲小孩聽的", "回答一個題目是: 1+1=多少?", 0.3)"""
         model = CHAT_MODEL_41
@@ -109,6 +131,8 @@ class LLM_responder:
     async def full_chat_gpt_41_mini(self, sys_prompt: str="", usr_prompt: str="", temperature: float=0.9, top_p: int=1)->str:
         """gpt4.1mini 
         使用 chat.completions API透過gpt-4.1-mini的自定義回答"單輪"對話
+        
+        注意：當 use_ollama=True 時，會自動切換到本地 Ollama 模型
 
         usage: full_chat_gpt_41_mini("總結剛剛的描述內容", "太陽是什麼? 太陽是一個恆星", 0.3)"""
         model = MINI_MODEL
@@ -124,6 +148,8 @@ class LLM_responder:
     async def full_chat_gpt_41_nano(self, sys_prompt: str="", usr_prompt: str="", temperature: float=0.9, top_p: int=1)->str:
         """gpt4.1nano 比較快比較不需要智商的
         使用 chat.completions API透過gpt-4.1-nano的自定義回答"單輪"對話
+        
+        注意：當 use_ollama=True 時，會自動切換到本地 Ollama 模型
 
         usage: full_chat_gpt_41_nano("eval剛剛的內容", "太陽是什麼? 太陽是一個恆星", 0.3)"""
         model = NANO_MODEL
@@ -152,11 +178,15 @@ class LLM_responder:
     async def photo_generate(self, persona_base_info:dict)-> None:
         """把基本資料用4.1mini生成具體化的reification_prompt後，再生成生成大頭照"""
         model = PHOTO_MODEL
-        reification_prompt = await self._persona_to_prompt_reification(persona_base_info)
+        # 將字典轉換為JSON字串傳遞給提示詞
+        persona_info_str = json.dumps(persona_base_info, ensure_ascii=False)
+        reification_prompt = await self._persona_to_prompt_reification(persona_info_str)
         await self.__call_images_openai_api(model, reification_prompt, ("humanoid/humanoid_database/photo/" + persona_base_info['基本資料']['id'] + ".png"), '1024x1024')
 
     async def simulate_persona_answer(self, chat_messages: List[Dict[str, str]], model: str = CHAT_MODEL_4O) -> str:
-        """使用 chat.completions API透過gpt-4o回答問題，相似的function: chat_gpt_4o()"""
+        """使用 chat.completions API透過gpt-4o回答問題，相似的function: chat_gpt_4o()
+        
+        注意：當 use_ollama=True 時，會自動切換到本地 Ollama 模型"""
         model = CHAT_MODEL_4O
         prompt = chat_messages
         respond = await self.__call_completions_openai_api(model, prompt, 0.7)
@@ -212,9 +242,49 @@ async def unit_test():
 
     await asyncio.gather(*(limited_process(test_personas[p]) for p in test_personas)) #p是id list
 
+# ======= 工廠方法 =======
+def create_openai_responder(api_key=None):
+    """建立 OpenAI LLM responder"""
+    return LLM_responder(api_key=api_key, use_ollama=False)
+
+def create_ollama_responder(api_key=None):
+    """建立 Ollama LLM responder
+    
+    Args:
+        api_key: OpenAI API 金鑰（用於圖片生成和 embedding，可選）
+    """
+    return LLM_responder(api_key=api_key, use_ollama=True)
+
+async def test_ollama_integration():
+    """測試 Ollama 整合功能"""
+    print("🚀 測試 Ollama 整合...")
+    
+    # 建立 Ollama responder
+    llm = create_ollama_responder()
+    
+    # 測試簡單對話
+    try:
+        print("🗣️  測試對話功能...")
+        response = await llm.full_chat_gpt_4o(
+            sys_prompt="你是一個有幫助的AI助手。",
+            usr_prompt="請用繁體中文回答：什麼是機器學習？請簡短回答。",
+            temperature=0.7
+        )
+        print(f"✅ Ollama 回應測試成功：{response[:100]}...")
+        return True
+    except Exception as e:
+        print(f"❌ Ollama 對話測試失敗：{e}")
+        return False
+
 if __name__ == "__main__":
-    # 生成10個persona的照片一共花費
-    start = time.time()
-    asyncio.run(unit_test())
-    end = time.time()
-    print(f"\n✅ 全部任務完成，共花費 {end - start:.2f} 秒")
+    import sys
+    
+    if len(sys.argv) > 1 and sys.argv[1] == "test-ollama":
+        # 測試 Ollama 整合
+        asyncio.run(test_ollama_integration())
+    else:
+        # 原本的測試（生成 persona 照片）
+        start = time.time()
+        asyncio.run(unit_test())
+        end = time.time()
+        print(f"\n✅ 全部任務完成，共花費 {end - start:.2f} 秒")
