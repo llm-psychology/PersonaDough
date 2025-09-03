@@ -167,13 +167,21 @@ class GroupDialogueManager:
         self.conversation_history_path = "conversation_history"
         os.makedirs(self.conversation_history_path, exist_ok=True)
         self.chatbot = None
+        self._initialization_lock = None
 
     async def initialize(self):
-        """初始化聊天處理器"""
-        if not self.chatbot:
-            from interviewer.chat_with_persona import ChatWith
-            self.chatbot = ChatWith()
-            await self.chatbot.wait_until_ready()
+        """初始化聊天處理器（線程安全）"""
+        if self._initialization_lock is None:
+            import asyncio
+            self._initialization_lock = asyncio.Lock()
+        
+        async with self._initialization_lock:
+            if not self.chatbot:
+                logger.info("正在初始化 GroupDialogueManager 的 ChatWith 實例...")
+                from interviewer.chat_with_persona import ChatWith
+                self.chatbot = ChatWith()
+                await self.chatbot.wait_until_ready()
+                logger.info(f"GroupDialogueManager 初始化完成，載入了 {len(self.chatbot.persona_loader_obj.personas)} 個 persona")
 
     async def load_group_dialogue_history(self, session_id: str) -> List[Dict[str, str]]:
         """載入群組對話歷史"""
@@ -606,6 +614,130 @@ async def generate_humanoid(count: int = Query(1, gt=0, le=10, description="Numb
         logger.error(f"Error generating humanoid: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error generating humanoid: {str(e)}")
 
+@app.post("/generate-rag/{persona_id}")
+async def generate_rag_database(persona_id: str = Path(..., description="ID of the persona")):
+    """
+    為指定的 persona 生成 RAG 資料庫
+    
+    ## 功能描述
+    此 API 為指定的 persona 生成 RAG（Retrieval-Augmented Generation）資料庫，
+    包含訪談問答、向量化處理和索引建立，用於後續的對話生成。
+    
+    ## 輸入參數
+    - `persona_id` (str, 必需): 要生成 RAG 資料庫的 persona ID
+    
+    ## 輸出結果
+    - `success` (bool): 操作是否成功
+    - `message` (str): 結果訊息
+    - `persona_id` (str): 處理的 persona ID
+    - `rag_database_path` (str): 生成的資料庫路徑
+    
+    ## 注意事項
+    - 此過程可能需要較長時間（幾分鐘）
+    - 如果 RAG 資料庫已存在，將會跳過生成
+    - 生成失敗時會返回詳細錯誤訊息
+    """
+    try:
+        # 檢查 persona 是否存在
+        files = glob.glob(os.path.join(DATABASE_PATH, f"{persona_id}_*.json"))
+        if not files:
+            raise HTTPException(status_code=404, detail=f"Persona ID {persona_id} 不存在")
+        
+        # 檢查 RAG 資料庫是否已存在
+        rag_database_path = "interviewer/rag_database"
+        persona_rag_dir = os.path.join(rag_database_path, persona_id)
+        index_file = os.path.join(persona_rag_dir, "index.faiss")
+        
+        if os.path.exists(index_file):
+            return {
+                "success": True,
+                "message": f"RAG 資料庫已存在，無需重新生成",
+                "persona_id": persona_id,
+                "rag_database_path": persona_rag_dir
+            }
+        
+        logger.info(f"開始為 {persona_id} 生成 RAG 資料庫...")
+        await generate_persona_rag_by_id(persona_id)
+        logger.info(f"成功為 {persona_id} 生成 RAG 資料庫")
+        
+        return {
+            "success": True,
+            "message": f"成功為 persona {persona_id} 生成 RAG 資料庫",
+            "persona_id": persona_id,
+            "rag_database_path": persona_rag_dir
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"為 {persona_id} 生成 RAG 資料庫失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"生成 RAG 資料庫失敗: {str(e)}")
+
+@app.get("/rag-status")
+async def get_rag_status():
+    """
+    獲取所有 persona 的 RAG 資料庫狀態
+    
+    ## 功能描述
+    檢查所有現有 persona 的 RAG 資料庫是否已建立，
+    協助用戶了解哪些 persona 可以立即用於對話。
+    
+    ## 輸出結果
+    - `total_personas` (int): 總 persona 數量
+    - `rag_ready_count` (int): 已有 RAG 資料庫的 persona 數量
+    - `personas` (List): 詳細的 persona 狀態列表
+      - `id` (str): Persona ID
+      - `name` (str): Persona 姓名
+      - `rag_ready` (bool): RAG 資料庫是否就緒
+      - `rag_path` (str): RAG 資料庫路徑（如果存在）
+    """
+    try:
+        files = glob.glob(os.path.join(DATABASE_PATH, "*.json"))
+        rag_database_path = "interviewer/rag_database"
+        
+        personas_status = []
+        rag_ready_count = 0
+        
+        for file_path in files:
+            try:
+                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                    content = await f.read()
+                    data = json.loads(content)
+                    
+                    persona_id = data["基本資料"]["id"]
+                    persona_name = data["基本資料"]["姓名"]
+                    
+                    # 檢查 RAG 資料庫狀態
+                    persona_rag_dir = os.path.join(rag_database_path, persona_id)
+                    index_file = os.path.join(persona_rag_dir, "index.faiss")
+                    qa_file = os.path.join(persona_rag_dir, "qa_pairs.json")
+                    
+                    rag_ready = os.path.exists(index_file) and os.path.exists(qa_file)
+                    if rag_ready:
+                        rag_ready_count += 1
+                    
+                    personas_status.append({
+                        "id": persona_id,
+                        "name": persona_name,
+                        "rag_ready": rag_ready,
+                        "rag_path": persona_rag_dir if rag_ready else None
+                    })
+                    
+            except Exception as e:
+                logger.warning(f"處理檔案 {file_path} 時發生錯誤: {e}")
+                continue
+        
+        return {
+            "success": True,
+            "total_personas": len(personas_status),
+            "rag_ready_count": rag_ready_count,
+            "personas": personas_status
+        }
+        
+    except Exception as e:
+        logger.error(f"獲取 RAG 狀態失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"獲取 RAG 狀態失敗: {str(e)}")
+
 @app.get("/humanoids", response_class=JSONResponse)
 async def list_humanoids():
     '''
@@ -771,12 +903,158 @@ async def search_humanoids(filter_params: HumanoidFilter):
 dialogue_manager = PersonaDialogueManager()
 group_dialogue_manager = GroupDialogueManager()
 
+@app.get("/persona/{persona_id}/name")
+async def get_persona_name(persona_id: str):
+    """
+    根據 persona ID 獲取角色姓名
+    
+    ## 功能描述
+    此 API 端點可以根據 persona ID 返回對應角色的姓名。
+    主要用於 Unity 客戶端自動獲取角色姓名，避免手動設定。
+    
+    ## 輸入參數 (Input)
+    - `persona_id` (str, 必需): persona 的唯一 ID
+    
+    ## 輸出結果 (Output)
+    - `persona_id` (str): 輸入的 persona ID
+    - `name` (str): 角色姓名
+    - `success` (bool): 是否成功獲取姓名
+    
+    ## 使用範例
+    **請求範例:**
+    ```
+    GET /persona/867b21d0fe/name
+    ```
+    
+    **回應範例:**
+    ```json
+    {
+        "persona_id": "867b21d0fe",
+        "name": "何素珍",
+        "success": true
+    }
+    ```
+    
+    ## 注意事項
+    - 如果 persona ID 不存在，返回 404 錯誤
+    - 確保 persona_loader 已經初始化
+    """
+    try:
+        # 確保 persona loader 已初始化
+        if not hasattr(app.state, 'persona_loader'):
+            from module.PERSONA_loader import PersonaLoader
+            app.state.persona_loader = PersonaLoader()
+        
+        await app.state.persona_loader.wait_until_ready()
+        
+        # 獲取 persona 資料
+        persona_data = app.state.persona_loader.get_persona_by_id(persona_id)
+        if not persona_data:
+            raise HTTPException(status_code=404, detail=f"找不到 persona ID: {persona_id}")
+        
+        # 提取姓名
+        name = persona_data.get('基本資料', {}).get('姓名', '')
+        if not name:
+            raise HTTPException(status_code=500, detail=f"persona {persona_id} 缺少姓名資料")
+        
+        return {
+            "persona_id": persona_id,
+            "name": name,
+            "success": True
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get persona name API failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/persona-dialogue", response_model=PersonaDialogueResponse)
 async def create_persona_dialogue(request: PersonaDialogueRequest):
     """
     讓兩個 persona 進行對話
+    
+    ## 功能描述
+    此 API 端點可以讓兩個不同的 persona（人格角色）進行自然的對話交流。
+    系統會根據每個 persona 的人格特質、背景故事和記憶資料來生成符合其特色的對話內容。
+    
+    ## 輸入參數 (Input)
+    **PersonaDialogueRequest:**
+    - `persona1_id` (str, 必需): 第一個對話者的 persona ID
+    - `persona2_id` (str, 必需): 第二個對話者的 persona ID  
+    - `num_rounds` (int, 可選): 對話輪數，預設為 5 輪
+    - `initial_topic` (str, 可選): 對話起始話題，預設為 "你好，很高興認識你"
+    - `session_id` (str, 可選): 會話 ID，用於延續之前的對話，若未提供則創建新會話
+    
+    ## 輸出結果 (Output)
+    **PersonaDialogueResponse:**
+    - `dialogue_rounds` (List[Dict[str, str]]): 對話輪次列表，每輪包含：
+      - `speaker`: 發言者姓名
+      - `content`: 發言內容
+      - `round`: 輪次編號
+    - `session_id` (str): 會話 ID，可用於後續延續對話
+    
+    ## 使用範例
+    **請求範例:**
+    ```json
+    {
+        "persona1_id": "abc123",
+        "persona2_id": "def456", 
+        "num_rounds": 3,
+        "initial_topic": "今天天氣真好呢",
+        "session_id": null
+    }
+    ```
+    
+    **回應範例:**
+    ```json
+    {
+        "dialogue_rounds": [
+            {
+                "speaker": "王小明",
+                "content": "是啊，今天陽光普照，讓人心情都變好了。",
+                "round": "1"
+            },
+            {
+                "speaker": "李小華", 
+                "content": "沒錯！這種天氣最適合出去走走了。",
+                "round": "1"
+            }
+        ],
+        "session_id": "dialogue_abc123_def456_x1y2z3"
+    }
+    ```
+    
+    ## 注意事項
+    - 兩個 persona ID 必須存在於系統中
+    - 對話內容會根據 persona 的人格特質和背景產生
+    - 可以使用返回的 session_id 來延續對話
+    - 若 persona 的 RAG 資料庫不存在，系統會自動生成（可能需要較長時間）
+    - 首次使用新 persona 進行對話時，回應時間可能較長
     """
     try:
+        # 檢查並確保兩個 persona 的 RAG 資料庫存在
+        rag_database_path = "interviewer/rag_database"
+        
+        for persona_id in [request.persona1_id, request.persona2_id]:
+            persona_rag_dir = os.path.join(rag_database_path, persona_id)
+            index_file = os.path.join(persona_rag_dir, "index.faiss")
+            
+            if not os.path.exists(index_file):
+                logger.info(f"RAG 資料庫不存在於 {persona_id}，正在自動生成...")
+                try:
+                    await generate_persona_rag_by_id(persona_id)
+                    logger.info(f"成功為 {persona_id} 生成 RAG 資料庫")
+                except Exception as e:
+                    logger.error(f"為 {persona_id} 生成 RAG 資料庫失敗: {e}")
+                    raise HTTPException(
+                        status_code=500, 
+                        detail=f"無法為 persona {persona_id} 生成必要的資料庫: {str(e)}"
+                    )
+        
+        # 確保 dialogue_manager 已初始化
+        await dialogue_manager.initialize()
+        
         dialogue_rounds, session_id = await dialogue_manager.conduct_dialogue(
             persona1_id=request.persona1_id,
             persona2_id=request.persona2_id,
@@ -1235,7 +1513,7 @@ class ModularSimulationResponse(BaseModel):
 # 模組化模擬框架 API 端點
 # =======================================================
 
-@app.get("/simulation-frontend")
+@app.get("/simulation-frontend")  
 def serve_simulation_frontend():
     """提供模組化模擬前端界面"""
     return FileResponse("simulation_frontend.html", media_type="text/html")
