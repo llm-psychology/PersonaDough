@@ -65,6 +65,10 @@ character_generator = CharacterGenerator() # Initialize character generator
 CONVERSATION_HISTORY_PATH = "conversation_history"
 os.makedirs(CONVERSATION_HISTORY_PATH, exist_ok=True)
 
+# Unity memory database
+UNITY_MEMORY_PATH = "unity_memory"
+os.makedirs(UNITY_MEMORY_PATH, exist_ok=True)
+
 # New: 火災模擬相關導入和初始化
 from scenario_simulator import FireScenarioSimulator
 import asyncio
@@ -90,12 +94,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+'''
+# Mount static files for output_internet directory
+app.mount("/unity", StaticFiles(directory="output_internet", html=True), name="unity")
+'''
 # =======================================================
 # frontend
 @app.get("/")
 def serve_frontend():
     return FileResponse("frontend.html", media_type="text/html")
+
+# Unity WebGL application - redirect to proper path
+# 手動掛接資料夾
+@app.get("/unity-app")
+def serve_unity_app():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/unity/", status_code=302)
 
 # fire simulation
 @app.get("/fire_simulation")
@@ -145,6 +159,7 @@ class PersonaDialogueRequest(BaseModel):
     num_rounds: int = 5
     initial_topic: str = "你好，很高興認識你"
     session_id: Optional[str] = None
+    memory_context: str = ""  # 新增記憶上下文
 
 class PersonaDialogueResponse(BaseModel):
     dialogue_rounds: List[Dict[str, str]]
@@ -161,6 +176,41 @@ class GroupDialogueResponse(BaseModel):
     dialogue_rounds: List[Dict[str, str]]
     session_id: str
     participants: List[Dict[str, str]]  # 參與者資訊
+
+# Unity記憶管理相關模型
+class UnityMemoryEntry(BaseModel):
+    persona1_id: str
+    persona1_name: str
+    persona2_id: str
+    persona2_name: str
+    speaker: str
+    content: str
+    timestamp: str
+    round: str
+
+class UnityMemoryRequest(BaseModel):
+    persona1_id: str
+    persona1_name: str
+    persona2_id: str
+    persona2_name: str
+    speaker: str
+    content: str
+    round: str
+
+class UnityMemoryResponse(BaseModel):
+    success: bool
+    message: str
+    memory_count: int
+
+class UnityMemoryContextRequest(BaseModel):
+    persona1_id: str
+    persona2_id: str
+
+class UnityMemoryContextResponse(BaseModel):
+    success: bool
+    context: str
+    memory_count: int
+    memories: List[UnityMemoryEntry]
 
 class GroupDialogueManager:
     def __init__(self):
@@ -483,6 +533,48 @@ async def save_conversation_history(session_id: str, history: List[Dict[str, str
     history_file = os.path.join(CONVERSATION_HISTORY_PATH, f"{session_id}.json")
     async with aiofiles.open(history_file, "w", encoding="utf-8") as f:
         await f.write(json.dumps(history, ensure_ascii=False, indent=2))
+
+# Unity記憶管理輔助函數
+def create_unity_memory_pair_key(persona1_id: str, persona2_id: str) -> str:
+    """創建角色對的標準化鍵值"""
+    if persona1_id <= persona2_id:
+        return f"{persona1_id}_{persona2_id}"
+    else:
+        return f"{persona2_id}_{persona1_id}"
+
+async def load_unity_memories(persona1_id: str, persona2_id: str) -> List[UnityMemoryEntry]:
+    """載入兩個角色之間的記憶"""
+    pair_key = create_unity_memory_pair_key(persona1_id, persona2_id)
+    memory_file = os.path.join(UNITY_MEMORY_PATH, f"{pair_key}.json")
+    
+    if os.path.exists(memory_file):
+        async with aiofiles.open(memory_file, "r", encoding="utf-8") as f:
+            content = await f.read()
+            data = json.loads(content)
+            return [UnityMemoryEntry(**entry) for entry in data]
+    return []
+
+async def save_unity_memories(persona1_id: str, persona2_id: str, memories: List[UnityMemoryEntry]):
+    """保存兩個角色之間的記憶"""
+    pair_key = create_unity_memory_pair_key(persona1_id, persona2_id)
+    memory_file = os.path.join(UNITY_MEMORY_PATH, f"{pair_key}.json")
+    
+    # 轉換為字典格式保存
+    memory_data = [memory.dict() for memory in memories]
+    async with aiofiles.open(memory_file, "w", encoding="utf-8") as f:
+        await f.write(json.dumps(memory_data, ensure_ascii=False, indent=2))
+
+def format_unity_memories_as_context(memories: List[UnityMemoryEntry]) -> str:
+    """格式化記憶為對話上下文字串"""
+    if not memories:
+        return "這是你們的第一次見面。"
+    
+    context_lines = [f"你們之前有過 {len(memories)} 次互動記錄："]
+    for memory in memories:
+        context_lines.append(f"- {memory.speaker}: {memory.content}")
+    context_lines.append("根據這些記憶，自然地繼續對話。")
+    
+    return "\n".join(context_lines)
 
 # =======================================================
 
@@ -1055,11 +1147,17 @@ async def create_persona_dialogue(request: PersonaDialogueRequest):
         # 確保 dialogue_manager 已初始化
         await dialogue_manager.initialize()
         
+        # 如果有記憶上下文，將其整合到 initial_topic 中
+        enhanced_topic = request.initial_topic
+        if request.memory_context:
+            enhanced_topic = f"{request.memory_context}\n\n當前話題: {request.initial_topic}"
+            logger.info(f"整合記憶上下文到對話中，長度: {len(request.memory_context)} 字元")
+        
         dialogue_rounds, session_id = await dialogue_manager.conduct_dialogue(
             persona1_id=request.persona1_id,
             persona2_id=request.persona2_id,
             num_rounds=request.num_rounds,
-            initial_topic=request.initial_topic,
+            initial_topic=enhanced_topic,
             session_id=request.session_id
         )
         
@@ -1130,6 +1228,246 @@ async def clear_group_dialogue_history(session_id: str):
         os.remove(history_file)
         return {"success": True, "message": f"群組對話歷史記錄 {session_id} 已清除"}
     raise HTTPException(status_code=404, detail=f"會話 {session_id} 不存在")
+
+# 測試端點
+@app.get("/test-unity")
+async def test_unity_endpoint():
+    """測試Unity端點是否工作"""
+    return {"message": "Unity測試端點正常工作", "success": True}
+
+# =======================================================
+# Unity記憶管理 API 端點
+# =======================================================
+
+@app.post("/unity-api/memory/add", response_model=UnityMemoryResponse)
+async def add_unity_memory(request: UnityMemoryRequest):
+    """
+    添加Unity對話記憶
+    
+    ## 功能描述
+    為Unity遊戲中的角色對話添加記憶記錄，支援角色間的互動歷史追蹤。
+    
+    ## 輸入參數
+    - `persona1_id` (str): 第一個角色ID
+    - `persona1_name` (str): 第一個角色姓名
+    - `persona2_id` (str): 第二個角色ID
+    - `persona2_name` (str): 第二個角色姓名
+    - `speaker` (str): 發言者姓名
+    - `content` (str): 對話內容
+    - `round` (str): 對話輪次
+    
+    ## 輸出結果
+    - `success` (bool): 是否成功添加記憶
+    - `message` (str): 操作結果訊息
+    - `memory_count` (int): 該角色對的總記憶數量
+    """
+    try:
+        # 載入現有記憶
+        existing_memories = await load_unity_memories(request.persona1_id, request.persona2_id)
+        
+        # 創建新記憶條目
+        from datetime import datetime
+        new_memory = UnityMemoryEntry(
+            persona1_id=request.persona1_id,
+            persona1_name=request.persona1_name,
+            persona2_id=request.persona2_id,
+            persona2_name=request.persona2_name,
+            speaker=request.speaker,
+            content=request.content,
+            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            round=request.round
+        )
+        
+        # 添加到記憶列表
+        existing_memories.append(new_memory)
+        
+        # 限制記憶數量（最多保留10條）
+        max_memories = 10
+        if len(existing_memories) > max_memories:
+            existing_memories = existing_memories[-max_memories:]
+        
+        # 保存記憶
+        await save_unity_memories(request.persona1_id, request.persona2_id, existing_memories)
+        
+        logger.info(f"Unity記憶已添加: {request.speaker} -> {request.content[:50]}...")
+        
+        return UnityMemoryResponse(
+            success=True,
+            message=f"成功添加記憶，{request.speaker}: {request.content[:30]}...",
+            memory_count=len(existing_memories)
+        )
+        
+    except Exception as e:
+        logger.error(f"添加Unity記憶失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"添加記憶失敗: {str(e)}")
+
+@app.post("/unity-api/memory/context", response_model=UnityMemoryContextResponse)
+async def get_unity_memory_context(request: UnityMemoryContextRequest):
+    """
+    獲取Unity角色對話的記憶上下文
+    
+    ## 功能描述
+    獲取兩個角色之間的對話記憶，格式化為上下文字串，用於Unity中的對話系統。
+    
+    ## 輸入參數
+    - `persona1_id` (str): 第一個角色ID
+    - `persona2_id` (str): 第二個角色ID
+    
+    ## 輸出結果
+    - `success` (bool): 是否成功獲取記憶
+    - `context` (str): 格式化的記憶上下文字串
+    - `memory_count` (int): 記憶條目數量
+    - `memories` (List[UnityMemoryEntry]): 詳細的記憶列表
+    """
+    try:
+        # 載入記憶
+        memories = await load_unity_memories(request.persona1_id, request.persona2_id)
+        
+        # 格式化為上下文
+        context = format_unity_memories_as_context(memories)
+        
+        logger.info(f"Unity記憶上下文獲取: {request.persona1_id} <-> {request.persona2_id}, 共 {len(memories)} 條記憶")
+        
+        return UnityMemoryContextResponse(
+            success=True,
+            context=context,
+            memory_count=len(memories),
+            memories=memories
+        )
+        
+    except Exception as e:
+        logger.error(f"獲取Unity記憶上下文失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"獲取記憶上下文失敗: {str(e)}")
+
+@app.delete("/unity-api/memory/clear/{persona1_id}/{persona2_id}")
+async def clear_unity_memory(persona1_id: str, persona2_id: str):
+    """
+    清除Unity角色對的記憶
+    
+    ## 功能描述
+    清除兩個特定角色之間的所有對話記憶。
+    
+    ## 輸入參數
+    - `persona1_id` (str): 第一個角色ID
+    - `persona2_id` (str): 第二個角色ID
+    
+    ## 輸出結果
+    - `success` (bool): 是否成功清除記憶
+    - `message` (str): 操作結果訊息
+    """
+    try:
+        pair_key = create_unity_memory_pair_key(persona1_id, persona2_id)
+        memory_file = os.path.join(UNITY_MEMORY_PATH, f"{pair_key}.json")
+        
+        if os.path.exists(memory_file):
+            os.remove(memory_file)
+            message = f"已清除 {persona1_id} 和 {persona2_id} 之間的所有記憶"
+        else:
+            message = f"{persona1_id} 和 {persona2_id} 之間沒有記憶記錄"
+        
+        logger.info(f"Unity記憶清除: {message}")
+        
+        return {
+            "success": True,
+            "message": message
+        }
+        
+    except Exception as e:
+        logger.error(f"清除Unity記憶失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"清除記憶失敗: {str(e)}")
+
+@app.delete("/unity-api/memory/clear-all")
+async def clear_all_unity_memories():
+    """
+    清除所有Unity記憶
+    
+    ## 功能描述
+    清除所有角色對的記憶記錄。
+    
+    ## 輸出結果
+    - `success` (bool): 是否成功清除所有記憶
+    - `message` (str): 操作結果訊息
+    - `cleared_count` (int): 清除的記憶文件數量
+    """
+    try:
+        import glob
+        memory_files = glob.glob(os.path.join(UNITY_MEMORY_PATH, "*.json"))
+        cleared_count = 0
+        
+        for file_path in memory_files:
+            try:
+                os.remove(file_path)
+                cleared_count += 1
+            except Exception as e:
+                logger.warning(f"無法刪除記憶文件 {file_path}: {e}")
+        
+        message = f"已清除 {cleared_count} 個記憶文件"
+        logger.info(f"Unity記憶全部清除: {message}")
+        
+        return {
+            "success": True,
+            "message": message,
+            "cleared_count": cleared_count
+        }
+        
+    except Exception as e:
+        logger.error(f"清除所有Unity記憶失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"清除所有記憶失敗: {str(e)}")
+
+@app.get("/unity-api/memory/stats")
+async def get_unity_memory_stats():
+    """
+    獲取Unity記憶統計資訊
+    
+    ## 功能描述
+    獲取Unity記憶系統的統計資訊，包括角色對數量和記憶總數。
+    
+    ## 輸出結果
+    - `success` (bool): 是否成功獲取統計資訊
+    - `total_pairs` (int): 角色對總數
+    - `total_memories` (int): 記憶條目總數
+    - `pairs_info` (List): 每個角色對的詳細資訊
+    """
+    try:
+        import glob
+        memory_files = glob.glob(os.path.join(UNITY_MEMORY_PATH, "*.json"))
+        
+        total_pairs = len(memory_files)
+        total_memories = 0
+        pairs_info = []
+        
+        for file_path in memory_files:
+            try:
+                pair_key = os.path.basename(file_path).replace('.json', '')
+                async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                    content = await f.read()
+                    data = json.loads(content)
+                    memory_count = len(data)
+                    total_memories += memory_count
+                    
+                    # 獲取角色名稱（從第一條記憶中）
+                    if data:
+                        first_memory = data[0]
+                        pairs_info.append({
+                            "pair_key": pair_key,
+                            "persona1_name": first_memory.get("persona1_name", "未知"),
+                            "persona2_name": first_memory.get("persona2_name", "未知"),
+                            "memory_count": memory_count,
+                            "last_interaction": data[-1].get("timestamp", "未知") if data else "無"
+                        })
+            except Exception as e:
+                logger.warning(f"處理記憶文件 {file_path} 時發生錯誤: {e}")
+        
+        return {
+            "success": True,
+            "total_pairs": total_pairs,
+            "total_memories": total_memories,
+            "pairs_info": pairs_info
+        }
+        
+    except Exception as e:
+        logger.error(f"獲取Unity記憶統計失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"獲取記憶統計失敗: {str(e)}")
 
 # =======================================================
 # 火災模擬 API 端點

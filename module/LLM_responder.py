@@ -42,16 +42,23 @@ class LLM_responder:
         self.use_ollama = use_ollama
         self.client = self.wrapper.client
 
-    async def __call_completions_openai_api(self, model, messages, temperature = 0.7, top_p = 1):
+    async def __call_completions_openai_api(self, model, messages, temperature = 0.7, top_p = 1, max_tokens = None):
         """使用封裝模組呼叫 chat.completions API"""
         try:
+            # 準備參數
+            params = {
+                "messages": messages,
+                "model": model,
+                "temperature": temperature,
+                "top_p": top_p
+            }
+            
+            # 如果指定了 max_tokens，加入參數
+            if max_tokens is not None:
+                params["max_tokens"] = max_tokens
+            
             # 使用新的封裝模組進行請求
-            response = await self.wrapper.chat_completion(
-                messages=messages,
-                model=model,
-                temperature=temperature,
-                top_p=top_p
-            )
+            response = await self.wrapper.chat_completion(**params)
             
             return response
         except Exception as e:
@@ -183,13 +190,19 @@ class LLM_responder:
         reification_prompt = await self._persona_to_prompt_reification(persona_info_str)
         await self.__call_images_openai_api(model, reification_prompt, ("humanoid/humanoid_database/photo/" + persona_base_info['基本資料']['id'] + ".png"), '1024x1024')
 
-    async def simulate_persona_answer(self, chat_messages: List[Dict[str, str]], model: str = CHAT_MODEL_4O) -> str:
+    async def simulate_persona_answer(self, chat_messages: List[Dict[str, str]], model: str = CHAT_MODEL_4O, max_tokens: int = 150) -> str:
         """使用 chat.completions API透過gpt-4o回答問題，相似的function: chat_gpt_4o()
         
-        注意：當 use_ollama=True 時，會自動切換到本地 Ollama 模型"""
+        注意：當 use_ollama=True 時，會自動切換到本地 Ollama 模型
+        
+        Args:
+            chat_messages: 對話訊息列表
+            model: 使用的模型
+            max_tokens: 最大回應長度（預設150，約30-50中文字）
+        """
         model = CHAT_MODEL_4O
         prompt = chat_messages
-        respond = await self.__call_completions_openai_api(model, prompt, 0.7)
+        respond = await self.__call_completions_openai_api(model, prompt, 0.7, 1, max_tokens)
         output = respond.choices[0].message.content.strip()
         return output if output is not None else ""
 
