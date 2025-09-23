@@ -160,6 +160,7 @@ class PersonaDialogueRequest(BaseModel):
     initial_topic: str = "你好，很高興認識你"
     session_id: Optional[str] = None
     memory_context: str = ""  # 新增記憶上下文
+    is_unity_dialogue: bool = False  # 標識是否為Unity對話
 
 class PersonaDialogueResponse(BaseModel):
     dialogue_rounds: List[Dict[str, str]]
@@ -548,10 +549,29 @@ async def load_unity_memories(persona1_id: str, persona2_id: str) -> List[UnityM
     memory_file = os.path.join(UNITY_MEMORY_PATH, f"{pair_key}.json")
     
     if os.path.exists(memory_file):
-        async with aiofiles.open(memory_file, "r", encoding="utf-8") as f:
-            content = await f.read()
-            data = json.loads(content)
-            return [UnityMemoryEntry(**entry) for entry in data]
+        try:
+            async with aiofiles.open(memory_file, "r", encoding="utf-8") as f:
+                content = await f.read()
+                # 檢查文件是否為空
+                if not content.strip():
+                    logger.warning(f"Unity記憶文件為空: {memory_file}")
+                    return []
+                data = json.loads(content)
+                return [UnityMemoryEntry(**entry) for entry in data]
+        except json.JSONDecodeError as e:
+            logger.error(f"Unity記憶文件JSON解析錯誤: {memory_file}, 錯誤: {e}")
+            # 如果文件損壞，創建備份並重新開始
+            backup_file = f"{memory_file}.backup"
+            try:
+                import shutil
+                shutil.copy2(memory_file, backup_file)
+                logger.info(f"已創建備份文件: {backup_file}")
+            except Exception as backup_e:
+                logger.warning(f"創建備份文件失敗: {backup_e}")
+            return []
+        except Exception as e:
+            logger.error(f"載入Unity記憶失敗: {e}")
+            return []
     return []
 
 async def save_unity_memories(persona1_id: str, persona2_id: str, memories: List[UnityMemoryEntry]):
@@ -1147,6 +1167,17 @@ async def create_persona_dialogue(request: PersonaDialogueRequest):
         # 確保 dialogue_manager 已初始化
         await dialogue_manager.initialize()
         
+        # 如果是Unity對話，獲取Unity記憶上下文
+        unity_memory_context = ""
+        if request.is_unity_dialogue:
+            try:
+                unity_memories = await load_unity_memories(request.persona1_id, request.persona2_id)
+                unity_memory_context = format_unity_memories_as_context(unity_memories)
+                logger.info(f"載入Unity記憶上下文，共 {len(unity_memories)} 條記憶")
+            except Exception as e:
+                logger.warning(f"載入Unity記憶失敗: {e}")
+                unity_memory_context = "這是你們的第一次見面。"
+        
         # 如果有記憶上下文，將其整合到 initial_topic 中
         enhanced_topic = request.initial_topic
         if request.memory_context:
@@ -1158,7 +1189,9 @@ async def create_persona_dialogue(request: PersonaDialogueRequest):
             persona2_id=request.persona2_id,
             num_rounds=request.num_rounds,
             initial_topic=enhanced_topic,
-            session_id=request.session_id
+            session_id=request.session_id,
+            is_unity_dialogue=request.is_unity_dialogue,
+            unity_memory_context=unity_memory_context
         )
         
         return PersonaDialogueResponse(
@@ -1234,6 +1267,301 @@ async def clear_group_dialogue_history(session_id: str):
 async def test_unity_endpoint():
     """測試Unity端點是否工作"""
     return {"message": "Unity測試端點正常工作", "success": True}
+
+# =======================================================
+# 生活模擬 API 端點
+# =======================================================
+
+from life_simulation_backend import life_simulation_manager, LifeSimulationRequest, LifeSimulationResponse
+
+@app.get("/api/life-simulation/start")
+async def start_life_simulation():
+    """啟動生活模擬"""
+    try:
+        request = LifeSimulationRequest(agent_count=3, time_speed=60.0)
+        response = await life_simulation_manager.start_simulation(request)
+        return response.dict()
+    except Exception as e:
+        logger.error(f"啟動生活模擬失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"啟動生活模擬失敗: {str(e)}")
+
+@app.get("/api/life-simulation/auto-start")
+async def auto_start_life_simulation():
+    """自動啟動生活模擬（當Unity第一次連接時）"""
+    try:
+        # 檢查是否已經有活躍的模擬
+        if life_simulation_manager.agents:
+            return {
+                "success": True,
+                "message": "生活模擬已經在運行",
+                "agent_count": len(life_simulation_manager.agents)
+            }
+        
+        # 自動啟動模擬
+        request = LifeSimulationRequest(agent_count=3, time_speed=60.0)
+        response = await life_simulation_manager.start_simulation(request)
+        
+        logger.info(f"自動啟動生活模擬: {response.message}")
+        return {
+            "success": response.success,
+            "message": response.message,
+            "agent_count": len(response.agents)
+        }
+        
+    except Exception as e:
+        logger.error(f"自動啟動生活模擬失敗: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"自動啟動失敗: {str(e)}",
+            "agent_count": 0
+        }
+
+@app.get("/api/life-simulation/agent-status/{agent_id}")
+async def get_agent_status(agent_id: str):
+    """獲取指定角色的狀態"""
+    try:
+        # 首先嘗試直接通過agent_id獲取
+        agent_status = life_simulation_manager.get_agent_status(agent_id)
+        if agent_status:
+            from dataclasses import asdict
+            return asdict(agent_status)
+        
+        # 如果找不到，嘗試通過persona_id獲取
+        agent_status = life_simulation_manager.get_agent_by_persona_id(agent_id)
+        if agent_status:
+            from dataclasses import asdict
+            return asdict(agent_status)
+        
+        # 如果還是找不到，創建一個默認狀態
+        logger.warning(f"角色 {agent_id} 不存在，創建默認狀態")
+        return await life_simulation_manager.create_default_agent_status(agent_id)
+        
+    except Exception as e:
+        logger.error(f"獲取角色狀態失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"獲取角色狀態失敗: {str(e)}")
+
+@app.get("/api/life-simulation/all-agents-status")
+async def get_all_agents_status():
+    """獲取所有角色狀態"""
+    try:
+        agents = life_simulation_manager.get_all_agents_status()
+        return {
+            "success": True,
+            "agent_count": len(agents),
+            "agents": agents
+        }
+    except Exception as e:
+        logger.error(f"獲取所有角色狀態失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"獲取所有角色狀態失敗: {str(e)}")
+
+@app.post("/api/life-simulation/agent/{agent_id}/command")
+async def execute_agent_command(agent_id: str, command_data: dict):
+    """執行代理人指令"""
+    try:
+        command = command_data.get("command")
+        params = command_data.get("params", {})
+        
+        result = await life_simulation_manager.execute_agent_command(agent_id, command, params)
+        return result
+        
+    except Exception as e:
+        logger.error(f"執行代理人指令失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"執行指令失敗: {str(e)}")
+
+@app.post("/api/life-simulation/stop")
+async def stop_life_simulation():
+    """停止生活模擬"""
+    try:
+        life_simulation_manager.stop_simulation()
+        return {"success": True, "message": "生活模擬已停止"}
+    except Exception as e:
+        logger.error(f"停止生活模擬失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"停止生活模擬失敗: {str(e)}")
+
+# =======================================================
+# 位置控制 API 端點
+# =======================================================
+
+@app.post("/api/location/move-character")
+async def move_character_to_location_api(request: dict):
+    """讓角色移動到指定位置"""
+    try:
+        character_id = request.get("character_id")
+        location_id = request.get("location_id")
+        movement_speed = request.get("movement_speed", 1.0)
+        
+        if not character_id or not location_id:
+            raise HTTPException(status_code=400, detail="缺少必要參數: character_id, location_id")
+        
+        # 執行移動指令
+        result = await life_simulation_manager.execute_agent_command(
+            character_id, 
+            "move_to", 
+            {"location": location_id, "speed": movement_speed}
+        )
+        
+        logger.info(f"角色移動請求: {character_id} -> {location_id}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"角色移動失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"角色移動失敗: {str(e)}")
+
+@app.post("/api/location/move-coordinates")
+async def move_character_to_coordinates_api(request: dict):
+    """讓角色移動到指定座標"""
+    try:
+        character_id = request.get("character_id")
+        x = request.get("x")
+        y = request.get("y")
+        movement_speed = request.get("movement_speed", 1.0)
+        
+        if character_id is None or x is None or y is None:
+            raise HTTPException(status_code=400, detail="缺少必要參數: character_id, x, y")
+        
+        result = await life_simulation_manager.execute_agent_command(
+            character_id,
+            "move_to_coordinates",
+            {"x": float(x), "y": float(y), "speed": movement_speed}
+        )
+        
+        logger.info(f"角色移動到座標: {character_id} -> ({x}, {y})")
+        return result
+        
+    except Exception as e:
+        logger.error(f"角色移動到座標失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"角色移動到座標失敗: {str(e)}")
+
+@app.get("/api/location/character/{character_id}")
+async def get_character_location_api(character_id: str):
+    """獲取角色位置資訊"""
+    try:
+        agent = life_simulation_manager.get_agent_by_persona_id(character_id)
+        if not agent:
+            agent = life_simulation_manager.get_agent_status(character_id)
+        
+        if agent:
+            return {
+                "success": True,
+                "character_id": character_id,
+                "current_location": agent.current_location,
+                "position": agent.position,
+                "is_moving": agent.is_moving
+            }
+        else:
+            return {
+                "success": False,
+                "message": f"找不到角色: {character_id}"
+            }
+    except Exception as e:
+        logger.error(f"獲取角色位置失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"獲取角色位置失敗: {str(e)}")
+
+@app.get("/api/location/all-locations")
+async def get_all_locations_api():
+    """獲取所有可用位置"""
+    try:
+        # 預設位置列表
+        locations = [
+            {"id": "home", "name": "家", "type": "Home", "position": {"x": 0.0, "y": 0.0}},
+            {"id": "school", "name": "學校", "type": "School", "position": {"x": 10.0, "y": 10.0}},
+            {"id": "workplace", "name": "工作場所", "type": "Workplace", "position": {"x": -10.0, "y": 5.0}},
+            {"id": "soccer_field", "name": "足球場", "type": "SoccerField", "position": {"x": 20.0, "y": -10.0}},
+            {"id": "restaurant", "name": "餐廳", "type": "Restaurant", "position": {"x": -5.0, "y": -5.0}},
+            {"id": "park", "name": "公園", "type": "Park", "position": {"x": 15.0, "y": 5.0}},
+        ]
+        
+        return {
+            "success": True,
+            "total_count": len(locations),
+            "locations": locations
+        }
+    except Exception as e:
+        logger.error(f"獲取位置列表失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"獲取位置列表失敗: {str(e)}")
+
+# =======================================================
+# Unity專用對話API端點
+# =======================================================
+
+@app.post("/unity-api/dialogue", response_model=PersonaDialogueResponse)
+async def create_unity_dialogue(request: PersonaDialogueRequest):
+    """
+    Unity專用的對話API
+    
+    ## 功能描述
+    專為Unity遊戲設計的對話API，自動使用Unity記憶系統，
+    並生成以'unity'結尾的會話ID。
+    
+    ## 特點
+    - 自動載入Unity記憶上下文
+    - 會話ID格式: dialogue_{persona1_id}_{persona2_id}_unity
+    - 整合Unity記憶系統
+    - 自動保存對話到Unity記憶中
+    """
+    try:
+        # 強制設定為Unity對話
+        request.is_unity_dialogue = True
+        
+        # 檢查並確保兩個 persona 的 RAG 資料庫存在
+        rag_database_path = "interviewer/rag_database"
+        
+        for persona_id in [request.persona1_id, request.persona2_id]:
+            persona_rag_dir = os.path.join(rag_database_path, persona_id)
+            index_file = os.path.join(persona_rag_dir, "index.faiss")
+            
+            if not os.path.exists(index_file):
+                logger.info(f"RAG 資料庫不存在於 {persona_id}，正在自動生成...")
+                try:
+                    await generate_persona_rag_by_id(persona_id)
+                    logger.info(f"成功為 {persona_id} 生成 RAG 資料庫")
+                except Exception as e:
+                    logger.error(f"為 {persona_id} 生成 RAG 資料庫失敗: {e}")
+                    raise HTTPException(
+                        status_code=500, 
+                        detail=f"無法為 persona {persona_id} 生成必要的資料庫: {str(e)}"
+                    )
+        
+        # 確保 dialogue_manager 已初始化
+        await dialogue_manager.initialize()
+        
+        # 載入Unity記憶上下文
+        unity_memory_context = ""
+        try:
+            unity_memories = await load_unity_memories(request.persona1_id, request.persona2_id)
+            unity_memory_context = format_unity_memories_as_context(unity_memories)
+            logger.info(f"Unity對話載入記憶上下文，共 {len(unity_memories)} 條記憶")
+        except Exception as e:
+            logger.warning(f"載入Unity記憶失敗: {e}")
+            unity_memory_context = "這是你們的第一次見面。"
+        
+        # 整合記憶上下文到初始話題
+        enhanced_topic = request.initial_topic
+        if request.memory_context:
+            enhanced_topic = f"{request.memory_context}\n\n當前話題: {request.initial_topic}"
+            logger.info(f"整合額外記憶上下文到Unity對話中，長度: {len(request.memory_context)} 字元")
+        
+        # 執行對話
+        dialogue_rounds, session_id = await dialogue_manager.conduct_dialogue(
+            persona1_id=request.persona1_id,
+            persona2_id=request.persona2_id,
+            num_rounds=request.num_rounds,
+            initial_topic=enhanced_topic,
+            session_id=request.session_id,
+            is_unity_dialogue=True,
+            unity_memory_context=unity_memory_context
+        )
+        
+        logger.info(f"Unity對話完成，會話ID: {session_id}")
+        
+        return PersonaDialogueResponse(
+            dialogue_rounds=dialogue_rounds,
+            session_id=session_id
+        )
+        
+    except Exception as e:
+        logger.error(f"Unity對話API失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 # =======================================================
 # Unity記憶管理 API 端點

@@ -45,16 +45,20 @@ class PersonaDialogueManager:
         async with aiofiles.open(history_file, "w", encoding="utf-8") as f:
             await f.write(json.dumps(history, ensure_ascii=False, indent=2))
 
-    async def create_session_id(self, persona1_id: str, persona2_id: str) -> str:
+    async def create_session_id(self, persona1_id: str, persona2_id: str, is_unity: bool = False) -> str:
         """創建新的會話 ID"""
-        return f"dialogue_{persona1_id}_{persona2_id}_{str(uuid.uuid4())[:8]}"
+        if is_unity:
+            return f"dialogue_{persona1_id}_{persona2_id}_unity"
+        else:
+            return f"dialogue_{persona1_id}_{persona2_id}_{str(uuid.uuid4())[:8]}"
 
     async def get_persona_context(
         self,
         persona_id: str,
         current_topic: str,
         conversation_history: List[Dict[str, str]],
-        other_persona_name: str
+        other_persona_name: str,
+        unity_memory_context: str = ""
     ) -> Tuple[str, List[str]]:
         """獲取 persona 的對話上下文和相關記憶"""
         index, docs, _ = await self.chatbot.interviewer_obj.load_rag_database(persona_id)
@@ -71,8 +75,14 @@ class PersonaDialogueManager:
         
         # 建立對話上下文
         conversation_context = ""
+        
+        # 如果有Unity記憶上下文，優先使用
+        if unity_memory_context:
+            conversation_context = f"Unity記憶上下文:\n{unity_memory_context}\n\n"
+        
+        # 添加當前會話的對話歷史
         if conversation_history:
-            conversation_context = "之前的對話:\n" + "\n".join([
+            conversation_context += "之前的對話:\n" + "\n".join([
                 f"{exchange['speaker']}: {exchange['content']}" 
                 for exchange in conversation_history[-5:]
             ])
@@ -111,7 +121,9 @@ class PersonaDialogueManager:
         persona2_id: str,
         num_rounds: int,
         initial_topic: str,
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        is_unity_dialogue: bool = False,
+        unity_memory_context: str = ""
     ) -> Tuple[List[Dict[str, str]], str]:
         """執行兩個 persona 之間的對話"""
         await self.initialize()
@@ -125,7 +137,7 @@ class PersonaDialogueManager:
         
         # 獲取或創建會話 ID
         if not session_id:
-            session_id = await self.create_session_id(persona1_id, persona2_id)
+            session_id = await self.create_session_id(persona1_id, persona2_id, is_unity_dialogue)
             logger.info(f"創建新的對話會話: {session_id}")
             history = []
         else:
@@ -139,10 +151,11 @@ class PersonaDialogueManager:
         dialogue_rounds = []
         current_topic = initial_topic
         
-        for _ in range(num_rounds):
+        for round_num in range(num_rounds):
             # Persona 1 的回合
             conv_context, retrieved_docs = await self.get_persona_context(
-                persona1_id, current_topic, history, persona2_data['基本資料']['姓名']
+                persona1_id, current_topic, history, persona2_data['基本資料']['姓名'],
+                unity_memory_context
             )
             
             persona1_response = await self.generate_persona_response(
@@ -152,13 +165,15 @@ class PersonaDialogueManager:
             
             dialogue_rounds.append({
                 "speaker": persona1_data['基本資料']['姓名'],
-                "content": persona1_response
+                "content": persona1_response,
+                "round": str(round_num + 1)
             })
             current_topic = persona1_response
             
             # Persona 2 的回合
             conv_context, retrieved_docs = await self.get_persona_context(
-                persona2_id, current_topic, dialogue_rounds, persona1_data['基本資料']['姓名']
+                persona2_id, current_topic, dialogue_rounds, persona1_data['基本資料']['姓名'],
+                unity_memory_context
             )
             
             persona2_response = await self.generate_persona_response(
@@ -168,7 +183,8 @@ class PersonaDialogueManager:
             
             dialogue_rounds.append({
                 "speaker": persona2_data['基本資料']['姓名'],
-                "content": persona2_response
+                "content": persona2_response,
+                "round": str(round_num + 1)
             })
             current_topic = persona2_response
         

@@ -1,6 +1,12 @@
 # something
 #spec.md
 #*.json
+output_internet/
+simulation_results/
+unity_memory/
+
+
+
 humanoid/humanoid_database
 論文spec.md
 .vscode/
