@@ -29,6 +29,7 @@ class CharacterLocationStatus:
 @dataclass
 class CharacterLocationMemory:
     character_id: str
+    home_location_id: str = None               # 角色的住所ID
     preferred_locations: Dict[str, str] = None  # location_type -> location_id
     known_locations: List[str] = None          # 所有認識的位置ID
     
@@ -45,6 +46,7 @@ DEFAULT_LOCATIONS = {
     "workplace_default": LocationInfo("workplace_default", "預設工作場所", "Workplace", {"x": -10.0, "y": 5.0}, "預設工作地點"),
     "soccer_field_default": LocationInfo("soccer_field_default", "預設足球場", "SoccerField", {"x": 20.0, "y": -10.0}, "預設運動場所"),
     "restaurant_default": LocationInfo("restaurant_default", "預設餐廳", "Restaurant", {"x": -5.0, "y": -5.0}, "預設用餐地點"),
+    "park_default": LocationInfo("park_default", "預設公園", "Park", {"x": 15.0, "y": 5.0}, "預設公園"),
     
     # 可以動態添加更多位置
     "home_house1": LocationInfo("home_house1", "1號房子", "Home", {"x": 2.0, "y": 3.0}, "社區1號房"),
@@ -156,6 +158,27 @@ class SmartLocationManager:
     def get_character_memory(self, character_id: str) -> Optional[CharacterLocationMemory]:
         """獲取角色記憶"""
         return self.character_memories.get(character_id)
+    
+    def get_character_home(self, character_id: str) -> Optional[str]:
+        """獲取角色的住所ID"""
+        memory = self.get_character_memory(character_id)
+        if memory and memory.home_location_id:
+            return memory.home_location_id
+        return None
+    
+    def set_character_home(self, character_id: str, location_id: str):
+        """設置角色的住所"""
+        if character_id not in self.character_memories:
+            self.character_memories[character_id] = CharacterLocationMemory(character_id=character_id)
+        
+        memory = self.character_memories[character_id]
+        memory.home_location_id = location_id
+        
+        # 也添加到已知位置
+        if location_id not in memory.known_locations:
+            memory.known_locations.append(location_id)
+        
+        logger.info(f"設置角色 {character_id} 的住所為: {location_id}")
     
     def add_character_known_location(self, character_id: str, location_id: str):
         """讓角色認識新位置"""
@@ -633,6 +656,130 @@ LOCATION_FUNCTION_TOOLS = [
     }
 ]
 
+# =======================================================
+# 新增智慧Function Calling工具
+# =======================================================
+
+def smart_assign_character_home(character_id: str, share_with: str = None, preference: str = "private") -> Dict[str, Any]:
+    """
+    智慧分配角色住所 - 支持共享和偏好設定
+    
+    Args:
+        character_id: 角色ID
+        share_with: 要共享住所的其他角色ID（可選）
+        preference: 偏好類型 ("private", "shared", "any")
+    
+    Returns:
+        Dict: 分配結果
+    """
+    try:
+        available_homes = location_manager.get_all_locations_by_type("Home")
+        
+        if not available_homes:
+            return {
+                "success": False,
+                "message": "沒有可用的住所",
+                "assigned_home": None
+            }
+        
+        assigned_home = None
+        assignment_strategy = ""
+        
+        if share_with and preference in ["shared", "any"]:
+            # 嘗試與指定角色共享
+            other_home = location_manager.get_character_home(share_with)
+            if other_home:
+                location_manager.set_character_home(character_id, other_home)
+                assigned_home = other_home
+                assignment_strategy = f"shared_with_{share_with}"
+        
+        if not assigned_home:
+            if preference == "private":
+                # 尋找未被占用的住所
+                for home in available_homes:
+                    occupied = any(
+                        location_manager.get_character_home(char_id) == home.id 
+                        for char_id in location_manager.character_memories.keys()
+                    )
+                    if not occupied:
+                        location_manager.set_character_home(character_id, home.id)
+                        assigned_home = home.id
+                        assignment_strategy = "private"
+                        break
+            
+            if not assigned_home:
+                # 分配第一個可用的住所
+                location_manager.set_character_home(character_id, available_homes[0].id)
+                assigned_home = available_homes[0].id
+                assignment_strategy = "fallback"
+        
+        return {
+            "success": True,
+            "message": f"✅ 成功為角色 {character_id} 分配住所: {assigned_home} (策略: {assignment_strategy})",
+            "assigned_home": assigned_home,
+            "assignment_strategy": assignment_strategy,
+            "can_share": preference in ["shared", "any"]
+        }
+        
+    except Exception as e:
+        logger.error(f"智慧分配住所時發生錯誤: {e}")
+        return {
+            "success": False,
+            "message": f"分配住所失敗: {str(e)}",
+            "assigned_home": None
+        }
+
+def get_character_life_locations(character_id: str) -> Dict[str, Any]:
+    """
+    獲取角色的生活位置地圖
+    
+    Args:
+        character_id: 角色ID
+    
+    Returns:
+        Dict: 角色的所有生活位置信息
+    """
+    try:
+        memory = location_manager.get_character_memory(character_id)
+        if not memory:
+            return {
+                "success": False,
+                "message": f"找不到角色 {character_id} 的記憶",
+                "locations": {}
+            }
+        
+        life_locations = {
+            "home": location_manager.get_character_home(character_id),
+            "known_locations": memory.known_locations,
+            "total_known": len(memory.known_locations)
+        }
+        
+        # 添加位置詳細信息
+        location_details = {}
+        for loc_id in memory.known_locations:
+            location = location_manager.get_location(loc_id)
+            if location:
+                location_details[loc_id] = {
+                    "name": location.name,
+                    "type": location.type,
+                    "position": location.position
+                }
+        
+        return {
+            "success": True,
+            "message": f"✅ 獲取角色 {character_id} 的生活位置地圖",
+            "locations": life_locations,
+            "location_details": location_details
+        }
+        
+    except Exception as e:
+        logger.error(f"獲取角色生活位置時發生錯誤: {e}")
+        return {
+            "success": False,
+            "message": f"獲取失敗: {str(e)}",
+            "locations": {}
+        }
+
 LOCATION_FUNCTION_MAP = {
     "move_character_to_location": move_character_to_location,
     "move_character_to_coordinates": move_character_to_coordinates,
@@ -641,6 +788,8 @@ LOCATION_FUNCTION_MAP = {
     "create_shared_house": create_shared_house,
     "get_all_locations_info": get_all_locations_info,
     "get_character_memory_info": get_character_memory_info,
+    "smart_assign_character_home": smart_assign_character_home,
+    "get_character_life_locations": get_character_life_locations,
 }
 
 

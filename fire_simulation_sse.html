@@ -84,6 +84,7 @@
             padding: 20px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             overflow-y: auto;
+            max-height: calc(100vh - 390px);  /* 固定高度 */
         }
 
         .controls-panel {
@@ -92,6 +93,8 @@
             border-radius: 8px;
             padding: 20px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow-y: auto;
+            max-height: calc(100vh - 390px);  /* 固定高度 */
         }
 
         .logs-panel {
@@ -106,13 +109,20 @@
         /* 地圖樣式 */
         .floor-plan {
             display: grid;
+            /* 佈局改為 4 欄 3 列：
+               第1列：臥室A 臥室B 臥室C 浴室
+               第2列：走廊(跨4) 
+               第3列：客廳  廚房  大門  (空白) */
             grid-template-columns: repeat(4, 1fr);
             grid-template-rows: repeat(3, 1fr);
             gap: 10px;
-            height: 400px;
+            height: 520px;
             border: 2px solid #34495e;
             padding: 10px;
             background: #ecf0f1;
+        }
+        .room.corridor {
+            grid-column: 1 / span 4; /* 走廊跨整列四欄 */
         }
 
         .room {
@@ -180,6 +190,37 @@
             color: #2c3e50;
             position: relative;
         }
+
+        /* 內心獨白 / 記憶片段 氣泡 */
+        .agent-bubble {
+            position: absolute;
+            top: -30px;
+            left: 12px;
+            max-width: 90px;
+            background: rgba(255,255,255,0.95);
+            border: 1px solid #d0d4d7;
+            border-radius: 6px;
+            padding: 2px 5px;
+            font-size: 10px;
+            line-height: 1.2;
+            color: #2c3e50;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+            z-index: 2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .agent-bubble::after {
+            content: '';
+            position: absolute;
+            left: -6px;
+            top: 12px;
+            width: 0; height: 0;
+            border-top: 6px solid transparent;
+            border-bottom: 6px solid transparent;
+            border-right: 6px solid rgba(255,255,255,0.97);
+        }
+        .bubble-mono { display: block; font-weight: 500; }
 
         .agent-dot.panicked {
             border-color: #e74c3c;
@@ -315,6 +356,54 @@
             margin-top: 5px;
         }
 
+        /* 人格特質標籤樣式 */
+        .agent-traits {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px dashed #ddd;
+        }
+
+        .traits-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 4px;
+            gap: 4px;
+        }
+
+        .traits-label {
+            font-size: 10px;
+            color: #7f8c8d;
+            font-weight: bold;
+            min-width: 35px;
+        }
+
+        .trait-tag {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 500;
+        }
+
+        .trait-personality {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #a5d6a7;
+        }
+
+        .trait-social {
+            background: #e3f2fd;
+            color: #1565c0;
+            border: 1px solid #90caf9;
+        }
+
+        .trait-ability {
+            background: #fff3e0;
+            color: #e65100;
+            border: 1px solid #ffcc80;
+        }
+
         /* 日誌樣式 */
         .log-entry {
             margin-bottom: 8px;
@@ -370,11 +459,162 @@
         .info-value {
             color: #2c3e50;
         }
+
+        /* 代理人選擇器樣式 */
+        .agent-selector-container {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .agent-selection-mode {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 8px 12px;
+            border: 2px solid #3498db;
+            background: white;
+            color: #3498db;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+
+        .mode-btn.active {
+            background: #3498db;
+            color: white;
+        }
+
+        .mode-btn:hover {
+            background: #2980b9;
+            color: white;
+        }
+
+        .agent-list-container {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 5px;
+            margin-bottom: 10px;
+            background: #f9f9f9;
+        }
+
+        .agent-item {
+            display: flex;
+            align-items: flex-start;
+            padding: 8px;
+            margin-bottom: 5px;
+            background: white;
+            border-radius: 4px;
+            border: 1px solid #eee;
+            transition: all 0.2s;
+        }
+
+        .agent-item:hover {
+            border-color: #3498db;
+        }
+
+        .agent-item.selected {
+            border-color: #27ae60;
+            background: #f0fff4;
+        }
+
+        .agent-checkbox {
+            margin-right: 10px;
+            margin-top: 3px;
+        }
+
+        .agent-info-wrapper {
+            flex: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .agent-info-wrapper-vertical {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .agent-top-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .agent-traits-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+        }
+
+        .agent-name-label {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 13px;
+        }
+
+        .agent-room-select {
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 12px;
+            min-width: 80px;
+        }
+
+        .agent-room-select:disabled {
+            background: #eee;
+            cursor: not-allowed;
+        }
+
+        .selected-count {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-bottom: 5px;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .refresh-btn {
+            padding: 5px 10px;
+            font-size: 12px;
+            background: #ecf0f1;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .refresh-btn:hover {
+            background: #bdc3c7;
+        }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>🔥 火災現場模擬系統 (SSE版本)</h1>
+        <h1>🔥 火災現場模擬系統</h1>
         <div class="connection-status">
             <div class="status-indicator" id="connectionIndicator"></div>
             <span id="connectionStatus">未連接</span>
@@ -399,22 +639,51 @@
         <div class="control-group">
             <h3>模擬設定</h3>
             <div class="input-group">
-                <label for="numAgents">代理人數量:</label>
-                <input type="number" id="numAgents" min="1" max="20" value="8">
+                <label for="maxRounds">最大回合數 (Tick):</label>
+                <input type="number" id="maxRounds" min="5" max="100" value="15">
             </div>
             <div class="input-group">
                 <label for="fireRoom">起火房間:</label>
                 <select id="fireRoom">
-                    <option value="A1">房間 A1</option>
-                    <option value="A2">房間 A2</option>
-                    <option value="A3">房間 A3</option>
-                    <option value="B1">房間 B1</option>
-                    <option value="B2">房間 B2</option>
-                    <option value="B3">房間 B3</option>
-                    <option value="C1">房間 C1</option>
-                    <option value="C2">房間 C2</option>
+                    <option value="A1">A1 - 臥室A</option>
+                    <option value="A2">A2 - 臥室B</option>
+                    <option value="A3">A3 - 臥室C</option>
+                    <option value="A4">A4 - 浴室</option>
+                    <option value="C1">C1 - 客廳</option>
+                    <option value="C2" selected>C2 - 廚房</option>
                 </select>
             </div>
+
+            <!-- 代理人選擇區塊 -->
+            <div class="agent-selector-container">
+                <label>代理人選擇模式:</label>
+                <div class="agent-selection-mode">
+                    <button class="mode-btn active" id="randomModeBtn" onclick="setAgentMode('random')">隨機選擇</button>
+                    <button class="mode-btn" id="customModeBtn" onclick="setAgentMode('custom')">自訂選擇</button>
+                </div>
+
+                <!-- 隨機模式 -->
+                <div id="randomModePanel">
+                    <div class="input-group">
+                        <label for="numAgents">代理人數量:</label>
+                        <input type="number" id="numAgents" min="1" max="20" value="8">
+                    </div>
+                </div>
+
+                <!-- 自訂模式 -->
+                <div id="customModePanel" style="display: none;">
+                    <div style="display: flex; align-items: center; margin-bottom: 5px;">
+                        <span class="selected-count">已選擇: <strong id="selectedAgentCount">0</strong> 位代理人</span>
+                        <button class="refresh-btn" onclick="loadAvailableAgents()">🔄 重新載入</button>
+                    </div>
+                    <div class="agent-list-container" id="agentListContainer">
+                        <div style="text-align: center; padding: 20px; color: #7f8c8d;">
+                            點擊「重新載入」獲取可用代理人列表
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <button class="btn btn-primary" onclick="startSimulation()">開始模擬</button>
         </div>
 
@@ -462,6 +731,34 @@
         let maxReconnectAttempts = 5;
         let reconnectDelay = 2000; // 2秒
 
+        // 代理人選擇相關
+        let agentSelectionMode = 'random'; // 'random' 或 'custom'
+        let availableAgents = [];
+        let selectedAgents = {}; // { persona_id: { name, room } }
+
+        // 房間選項（用於代理人初始位置）
+        const ROOM_OPTIONS = [
+            { id: 'A1', name: '臥室A' },
+            { id: 'A2', name: '臥室B' },
+            { id: 'A3', name: '臥室C' },
+            { id: 'A4', name: '浴室' },
+            { id: 'C1', name: '客廳' },
+            { id: 'C2', name: '廚房' },
+            { id: 'B2', name: '走廊' }
+        ];
+
+        // 房間代碼對應表（前端代碼 -> 後端房間名稱）
+        const ROOM_ID_TO_NAME = {
+            "A1": "臥室A",
+            "A2": "臥室B",
+            "A3": "臥室C",
+            "A4": "浴室",
+            "B2": "走廊",
+            "C1": "客廳",
+            "C2": "廚房",
+            "C3": "大門"
+        };
+
         // 初始化
         document.addEventListener('DOMContentLoaded', function() {
             console.log('火災模擬系統初始化 (SSE版本)');
@@ -472,23 +769,36 @@
         // 初始化平面圖
         function initializeFloorPlan() {
             const floorPlan = document.getElementById('floorPlan');
-            const rooms = [
-                'A1', 'A2', 'A3', 'A4',
-                'B1', 'B2', 'B3', 'B4', 
-                'C1', 'C2', 'C3', 'C4'
+            
+            // 重新配置：
+            // 第1列: 臥室A 臥室B 臥室C 浴室
+            // 第2列: 走廊(跨4)
+            // 第3列: 客廳 廚房 大門 (空)
+            const roomConfig = [
+                { id: 'A1', name: '臥室A', isExit: false },
+                { id: 'A2', name: '臥室B', isExit: false },
+                { id: 'A3', name: '臥室C', isExit: false },
+                { id: 'A4', name: '浴室', isExit: false },
+                { id: 'B2', name: '走廊', isExit: false, isCorridor: true },
+                { id: 'C1', name: '客廳', isExit: false },
+                { id: 'C2', name: '廚房', isExit: false },
+                { id: 'C3', name: '大門', isExit: true }
             ];
 
-            rooms.forEach(roomId => {
+            roomConfig.forEach(config => {
                 const roomElement = document.createElement('div');
                 roomElement.className = 'room';
-                roomElement.id = `room-${roomId}`;
+                if (config.isCorridor) {
+                    roomElement.classList.add('corridor');
+                }
+                roomElement.id = `room-${config.id}`;
                 roomElement.innerHTML = `
-                    <div class="room-label">${roomId}</div>
-                    <div class="agents-in-room" id="agents-${roomId}"></div>
+                    <div class="room-label">${config.name || config.id}</div>
+                    <div class="agents-in-room" id="agents-${config.id}"></div>
                 `;
                 
                 // 設定出口房間
-                if (['A4', 'C4'].includes(roomId)) {
+                if (config.isExit) {
                     roomElement.classList.add('exit');
                 }
                 
@@ -498,24 +808,191 @@
             console.log('平面圖初始化完成');
         }
 
+        // 設定代理人選擇模式
+        function setAgentMode(mode) {
+            agentSelectionMode = mode;
+            
+            // 更新按鈕樣式
+            document.getElementById('randomModeBtn').classList.toggle('active', mode === 'random');
+            document.getElementById('customModeBtn').classList.toggle('active', mode === 'custom');
+            
+            // 切換顯示面板
+            document.getElementById('randomModePanel').style.display = mode === 'random' ? 'block' : 'none';
+            document.getElementById('customModePanel').style.display = mode === 'custom' ? 'block' : 'none';
+            
+            // 如果切換到自訂模式且列表為空，自動載入
+            if (mode === 'custom' && availableAgents.length === 0) {
+                loadAvailableAgents();
+            }
+        }
+
+        // 載入可用的代理人列表
+        async function loadAvailableAgents() {
+            const container = document.getElementById('agentListContainer');
+            container.innerHTML = '<div style="text-align: center; padding: 20px;"><span class="loading-spinner"></span>載入中...</div>';
+            
+            try {
+                const response = await fetch('/humanoids');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                if (data.success && data.humanoids) {
+                    availableAgents = data.humanoids;
+                    renderAgentList();
+                    addLogEntry(`成功載入 ${availableAgents.length} 個可用代理人`, 'system');
+                } else {
+                    throw new Error('無法獲取代理人列表');
+                }
+            } catch (error) {
+                console.error('載入代理人列表失敗:', error);
+                container.innerHTML = `<div style="text-align: center; padding: 20px; color: #e74c3c;">載入失敗: ${error.message}</div>`;
+                addLogEntry(`載入代理人列表失敗: ${error.message}`, 'error');
+            }
+        }
+
+        // 渲染代理人列表
+        function renderAgentList() {
+            const container = document.getElementById('agentListContainer');
+            
+            if (availableAgents.length === 0) {
+                container.innerHTML = '<div style="text-align: center; padding: 20px; color: #7f8c8d;">沒有可用的代理人</div>';
+                return;
+            }
+            
+            // 生成房間選項 HTML
+            const roomOptionsHtml = ROOM_OPTIONS.map(room => 
+                `<option value="${room.id}">${room.name}</option>`
+            ).join('');
+            
+            container.innerHTML = availableAgents.map(agent => {
+                // 生成人格特質標籤
+                const traitsHtml = (agent.traits || []).map(t => `<span class="trait-tag trait-personality">${t}</span>`).join('');
+                const socialHtml = (agent.social_abilities || []).map(t => `<span class="trait-tag trait-social">${t}</span>`).join('');
+                const abilityHtml = (agent.ability_attributes || []).map(t => `<span class="trait-tag trait-ability">${t}</span>`).join('');
+                
+                return `
+                <div class="agent-item ${selectedAgents[agent.id] ? 'selected' : ''}" data-agent-id="${agent.id}">
+                    <input type="checkbox" class="agent-checkbox" 
+                           id="agent-cb-${agent.id}" 
+                           ${selectedAgents[agent.id] ? 'checked' : ''}
+                           onchange="toggleAgentSelection('${agent.id}', '${agent.name}')">
+                    <div class="agent-info-wrapper-vertical">
+                        <div class="agent-top-row">
+                            <label class="agent-name-label" for="agent-cb-${agent.id}">${agent.name}</label>
+                            <select class="agent-room-select" 
+                                    id="agent-room-${agent.id}" 
+                                    onchange="updateAgentRoom('${agent.id}')"
+                                    ${!selectedAgents[agent.id] ? 'disabled' : ''}>
+                                ${roomOptionsHtml}
+                            </select>
+                        </div>
+                        <div class="agent-traits-preview">
+                            ${traitsHtml}${socialHtml}${abilityHtml}
+                        </div>
+                    </div>
+                </div>
+            `;
+            }).join('');
+            
+            // 恢復已選代理人的房間設定
+            Object.keys(selectedAgents).forEach(agentId => {
+                const roomSelect = document.getElementById(`agent-room-${agentId}`);
+                if (roomSelect && selectedAgents[agentId].room) {
+                    roomSelect.value = selectedAgents[agentId].room;
+                }
+            });
+            
+            updateSelectedCount();
+        }
+
+        // 切換代理人選擇
+        function toggleAgentSelection(agentId, agentName) {
+            const checkbox = document.getElementById(`agent-cb-${agentId}`);
+            const roomSelect = document.getElementById(`agent-room-${agentId}`);
+            const agentItem = document.querySelector(`.agent-item[data-agent-id="${agentId}"]`);
+            
+            if (checkbox.checked) {
+                // 選中代理人，預設房間為客廳
+                selectedAgents[agentId] = {
+                    name: agentName,
+                    room: roomSelect.value || 'C1'
+                };
+                roomSelect.disabled = false;
+                agentItem.classList.add('selected');
+            } else {
+                // 取消選中
+                delete selectedAgents[agentId];
+                roomSelect.disabled = true;
+                agentItem.classList.remove('selected');
+            }
+            
+            updateSelectedCount();
+        }
+
+        // 更新代理人房間
+        function updateAgentRoom(agentId) {
+            const roomSelect = document.getElementById(`agent-room-${agentId}`);
+            if (selectedAgents[agentId]) {
+                selectedAgents[agentId].room = roomSelect.value;
+            }
+        }
+
+        // 更新已選數量顯示
+        function updateSelectedCount() {
+            const count = Object.keys(selectedAgents).length;
+            document.getElementById('selectedAgentCount').textContent = count;
+        }
+
         // 開始模擬
         async function startSimulation() {
-            const numAgents = document.getElementById('numAgents').value;
-            const fireRoom = document.getElementById('fireRoom').value;
+            const maxRounds = document.getElementById('maxRounds').value;
+            const fireRoomId = document.getElementById('fireRoom').value;
+            const fireRoomName = ROOM_ID_TO_NAME[fireRoomId] || "廚房";
+
+            // 準備請求資料
+            let requestBody = {
+                max_rounds: parseInt(maxRounds),
+                simulation_speed: 1.0,
+                fire_start_room: fireRoomName
+            };
+
+            if (agentSelectionMode === 'random') {
+                // 隨機模式
+                const numAgents = document.getElementById('numAgents').value;
+                requestBody.num_agents = parseInt(numAgents);
+                addLogEntry(`準備開始模擬 (隨機模式) - 代理人數: ${numAgents}, 最大回合: ${maxRounds}, 起火房間: ${fireRoomName}`, 'system');
+            } else {
+                // 自訂模式
+                const selectedCount = Object.keys(selectedAgents).length;
+                if (selectedCount === 0) {
+                    addLogEntry('請至少選擇一位代理人', 'error');
+                    alert('請至少選擇一位代理人！');
+                    return;
+                }
+                
+                // 構建自訂代理人配置
+                const customAgents = Object.entries(selectedAgents).map(([id, config]) => ({
+                    persona_id: id,
+                    name: config.name,
+                    initial_room: ROOM_ID_TO_NAME[config.room] || '客廳'
+                }));
+                
+                requestBody.custom_agents = customAgents;
+                requestBody.num_agents = selectedCount;
+                
+                const agentSummary = customAgents.map(a => `${a.name}(${a.initial_room})`).join(', ');
+                addLogEntry(`準備開始模擬 (自訂模式) - 代理人: ${agentSummary}, 最大回合: ${maxRounds}, 起火房間: ${fireRoomName}`, 'system');
+            }
 
             try {
-                addLogEntry(`準備開始模擬 - 代理人數: ${numAgents}, 起火房間: ${fireRoom}`, 'system');
-                
                 const response = await fetch('/start-fire-simulation', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        num_agents: parseInt(numAgents),
-                        max_rounds: 15,
-                        simulation_speed: 1.0
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
                 if (!response.ok) {
@@ -730,11 +1207,18 @@
 
         // 更新平面圖
         function updateFloorPlan(rooms, agents) {
-            // 重置所有房間
+            // 重置所有房間，但保留特殊類別
             document.querySelectorAll('.room').forEach(room => {
-                room.className = 'room';
                 const roomId = room.id.replace('room-', '');
-                if (['A4', 'C4'].includes(roomId)) {
+                // 保存是否為走廊
+                const isCorridor = room.classList.contains('corridor');
+                // 重置class
+                room.className = 'room';
+                // 恢復特殊類別
+                if (isCorridor) {
+                    room.classList.add('corridor');
+                }
+                if (roomId === 'C3') {  // 大門是出口
                     room.classList.add('exit');
                 }
             });
@@ -765,8 +1249,10 @@
                 if (agentContainer) {
                     const agentDot = document.createElement('div');
                     agentDot.className = 'agent-dot';
-                    agentDot.textContent = agent.id;
-                    agentDot.title = `${agent.name} - 健康: ${agent.health}% - 恐慌: ${agent.panic_level}%`;
+                    // 顯示名字的第一個字（姓氏）
+                    agentDot.textContent = agent.name ? agent.name.charAt(0) : '?';
+                    const roomLabel = agent.current_room_name || agent.current_room;
+                    agentDot.title = `${agent.name} @ ${roomLabel} - 健康: ${agent.health}% - 恐慌: ${agent.panic_level}%`;
                     
                     if (agent.panic_level > 70) {
                         agentDot.classList.add('panicked');
@@ -776,6 +1262,20 @@
                     }
                     if (agent.status === 'escaped') {
                         agentDot.classList.add('escaped');
+                    }
+
+                    // 內心獨白與記憶片段氣泡
+                    const mono = agent.internal_monologue || '';
+                    if (mono) {
+                        const bubble = document.createElement('div');
+                        bubble.className = 'agent-bubble';
+                        const monoEl = document.createElement('span');
+                        monoEl.className = 'bubble-mono';
+                        // 保證不超過 10 字
+                        const trimmedMono = String(mono).slice(0,10);
+                        monoEl.textContent = trimmedMono;
+                        bubble.appendChild(monoEl);
+                        agentDot.appendChild(bubble);
                     }
                     
                     agentContainer.appendChild(agentDot);
@@ -791,12 +1291,24 @@
             agents.forEach(agent => {
                 const statusElement = document.createElement('div');
                 statusElement.className = 'agent-status';
+                const roomLabel = agent.current_room_name || agent.current_room;
+                
+                // 生成人格特質標籤
+                const traitsHtml = (agent.traits || []).map(t => `<span class="trait-tag trait-personality">${t}</span>`).join('');
+                const socialHtml = (agent.social_abilities || []).map(t => `<span class="trait-tag trait-social">${t}</span>`).join('');
+                const abilityHtml = (agent.ability_attributes || []).map(t => `<span class="trait-tag trait-ability">${t}</span>`).join('');
+                
                 statusElement.innerHTML = `
-                    <div class="agent-name">${agent.name} (${agent.id})</div>
-                    <div class="agent-info">位置: ${agent.current_room}</div>
+                    <div class="agent-name">${agent.name}</div>
+                    <div class="agent-info">位置: ${roomLabel} (${agent.current_room})</div>
                     <div class="agent-info">健康: ${agent.health}%</div>
                     <div class="agent-info">恐慌: ${agent.panic_level}%</div>
                     <div class="agent-info">狀態: ${agent.status}</div>
+                    <div class="agent-traits">
+                        ${traitsHtml ? '<div class="traits-row"><span class="traits-label">人格:</span>' + traitsHtml + '</div>' : ''}
+                        ${socialHtml ? '<div class="traits-row"><span class="traits-label">社交:</span>' + socialHtml + '</div>' : ''}
+                        ${abilityHtml ? '<div class="traits-row"><span class="traits-label">能力:</span>' + abilityHtml + '</div>' : ''}
+                    </div>
                     <div class="agent-action">${agent.current_action || '等待中...'}</div>
                 `;
                 statusList.appendChild(statusElement);

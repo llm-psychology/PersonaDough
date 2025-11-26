@@ -13,6 +13,7 @@ import uvicorn
 import glob
 import uuid
 import asyncio
+from datetime import datetime, timedelta
 
 # Logging initialization
 logging.basicConfig(
@@ -51,6 +52,8 @@ from humanoid.humanoid_generator import (
     generate_a_persona
 )
 from interviewer.persona_dialogue import PersonaDialogueManager
+from location_function_tools import location_manager
+from llm_scheduler import llm_scheduler, ActivityRequest, ContextInfo
 
 # =======================================================
 
@@ -120,6 +123,214 @@ def serve_fire_simulation():
 @app.get("/fire_simulation_sse")
 def serve_fire_simulation_sse():
     return FileResponse("fire_simulation_sse.html", media_type="text/html")
+
+# =======================================================
+# LLM 智能排程 API 端點
+# =======================================================
+
+@app.post("/api/llm-schedule/generate-activity")
+async def generate_llm_activity(request: dict):
+    """使用 LLM 生成單個活動"""
+    try:
+        persona_id = request.get("persona_id")
+        time_slot = request.get("time_slot", "現在")
+        duration_minutes = request.get("duration_minutes", 60)
+        constraints = request.get("constraints", [])
+        
+        if not persona_id:
+            raise HTTPException(status_code=400, detail="缺少必要參數: persona_id")
+        
+        # 建立上下文資訊
+        context = ContextInfo(
+            current_time=datetime.now().strftime("%H:%M"),
+            weather=request.get("weather", "晴朗"),
+            season=request.get("season", "春季"),
+            available_locations=list(location_manager.locations.keys()),
+            other_characters=request.get("other_characters", []),
+            special_events=request.get("special_events", [])
+        )
+        
+        # 建立活動請求
+        activity_request = ActivityRequest(
+            persona_id=persona_id,
+            time_slot=time_slot,
+            duration_minutes=duration_minutes,
+            context=context,
+            constraints=constraints
+        )
+        
+        # 生成活動
+        activity = await llm_scheduler.generate_activity(activity_request)
+        
+        return {
+            "success": True,
+            "activity": {
+                "name": activity.name,
+                "activity_type": activity.activity_type,
+                "location": activity.location,
+                "duration": activity.duration,
+                "priority": activity.priority,
+                "reasoning": activity.reasoning,
+                "social_participants": activity.social_participants,
+                "required_items": activity.required_items
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"LLM 活動生成失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"LLM 活動生成失敗: {str(e)}")
+
+@app.post("/api/llm-schedule/generate-daily")
+async def generate_llm_daily_schedule(request: dict):
+    """使用 LLM 生成一整天的排程"""
+    try:
+        persona_id = request.get("persona_id")
+        date = request.get("date")  # YYYY-MM-DD 格式
+        
+        if not persona_id:
+            raise HTTPException(status_code=400, detail="缺少必要參數: persona_id")
+        
+        # 生成一整天的排程
+        activities = await llm_scheduler.generate_daily_schedule(persona_id, date)
+        
+        # 轉換為 API 回應格式
+        schedule_data = []
+        current_time = datetime.strptime("07:00", "%H:%M")
+        
+        for activity in activities:
+            start_time = current_time.strftime("%H:%M")
+            end_time = (current_time + timedelta(minutes=activity.duration)).strftime("%H:%M")
+            
+            schedule_data.append({
+                "name": activity.name,
+                "activity_type": activity.activity_type,
+                "location": activity.location,
+                "start_time": start_time,
+                "end_time": end_time,
+                "duration": activity.duration,
+                "priority": activity.priority,
+                "reasoning": activity.reasoning,
+                "social_participants": activity.social_participants,
+                "required_items": activity.required_items
+            })
+            
+            current_time += timedelta(minutes=activity.duration)
+        
+        return {
+            "success": True,
+            "persona_id": persona_id,
+            "date": date or datetime.now().strftime("%Y-%m-%d"),
+            "total_activities": len(schedule_data),
+            "schedule": schedule_data
+        }
+        
+    except Exception as e:
+        logger.error(f"LLM 日程生成失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"LLM 日程生成失敗: {str(e)}")
+
+@app.post("/api/llm-schedule/apply-to-agent")
+async def apply_llm_schedule_to_agent(request: dict):
+    """將 LLM 生成的排程應用到代理人"""
+    try:
+        persona_id = request.get("persona_id")
+        date = request.get("date")
+        
+        if not persona_id:
+            raise HTTPException(status_code=400, detail="缺少必要參數: persona_id")
+        
+        # 生成 LLM 排程
+        activities = await llm_scheduler.generate_daily_schedule(persona_id, date)
+        
+        # 轉換為生活模擬系統的格式
+        schedule_tasks = []
+        current_time = datetime.strptime("07:00", "%H:%M")
+        
+        for activity in activities:
+            task = {
+                "name": activity.name,
+                "activity_type": activity.activity_type,
+                "location": activity.location,
+                "start_time": current_time.strftime("%H:%M"),
+                "duration": activity.duration
+            }
+            schedule_tasks.append(task)
+            current_time += timedelta(minutes=activity.duration)
+        
+        # 找到對應的代理人
+        agent = None
+        for agent_id, agent_data in life_simulation_manager.agents.items():
+            if agent_data.persona_id == persona_id:
+                agent = agent_data
+                break
+        
+        if not agent:
+            raise HTTPException(status_code=404, detail=f"找不到 persona_id {persona_id} 對應的代理人")
+        
+        # 創建並應用排程
+        from life_simulation_backend import DailySchedule
+        schedule_id = f"llm_schedule_{agent.agent_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        
+        schedule = DailySchedule(
+            agent_id=agent.agent_id,
+            schedule_id=schedule_id,
+            tasks=schedule_tasks,
+            is_active=True
+        )
+        
+        life_simulation_manager.schedules[agent.agent_id] = schedule
+        
+        # 開始第一個任務
+        if schedule_tasks:
+            first_task = schedule_tasks[0]
+            await life_simulation_manager.start_scheduled_task(agent, first_task)
+        
+        return {
+            "success": True,
+            "message": f"已為 {agent.name} 應用 LLM 生成的排程",
+            "agent_id": agent.agent_id,
+            "schedule_id": schedule_id,
+            "task_count": len(schedule_tasks),
+            "activities": schedule_tasks
+        }
+        
+    except Exception as e:
+        logger.error(f"應用 LLM 排程失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"應用 LLM 排程失敗: {str(e)}")
+
+@app.get("/api/llm-schedule/personality/{persona_id}")
+async def get_personality_profile(persona_id: str):
+    """獲取人物個性檔案"""
+    try:
+        profile = await llm_scheduler.load_personality_profile(persona_id)
+        
+        return {
+            "success": True,
+            "profile": {
+                "persona_id": profile.persona_id,
+                "name": profile.name,
+                "age": profile.age,
+                "occupation": profile.occupation,
+                "personality_traits": profile.personality_traits,
+                "interests": profile.interests,
+                "daily_preferences": profile.daily_preferences,
+                "energy_pattern": profile.energy_pattern,
+                "social_level": profile.social_level
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"獲取個性檔案失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"獲取個性檔案失敗: {str(e)}")
+
+# schedule control
+@app.get("/schedule-control")
+def serve_schedule_control():
+    return FileResponse("schedule_control.html", media_type="text/html")
+
+# LLM schedule control
+@app.get("/llm-schedule-control")
+def serve_llm_schedule_control():
+    return FileResponse("llm_schedule_control.html", media_type="text/html")
 
 # =======================================================
 
@@ -877,7 +1088,10 @@ async def list_humanoids():
                     humanoids.append({
                         "id": data["基本資料"]["id"],
                         "name": data["基本資料"]["姓名"],
-                        "file_path": file_path
+                        "file_path": file_path,
+                        "traits": data.get("人格屬性", {}).get("人格特質", []),
+                        "social_abilities": data.get("人格屬性", {}).get("社交能力", []),
+                        "ability_attributes": data.get("人格屬性", {}).get("能力屬性", [])
                     })
             except Exception as e:
                 logger.warning(f"Error reading file {file_path}: {e}")
@@ -1379,6 +1593,210 @@ async def stop_life_simulation():
         raise HTTPException(status_code=500, detail=f"停止生活模擬失敗: {str(e)}")
 
 # =======================================================
+# 每日行程管理 API 端點
+# =======================================================
+
+@app.post("/api/schedule/apply-to-all")
+async def apply_schedule_to_all_agents(schedule_type: str = "balanced"):
+    """
+    一鍵為所有代理人安排每日行程
+    
+    ## 功能描述
+    為所有現有的代理人自動安排指定的每日行程，讓他們按照固定時間表執行日常活動。
+    
+    ## 輸入參數
+    - `schedule_type` (str): 行程類型，可選值：
+      - `student`: 學生行程（上學、放學、踢足球）
+      - `worker`: 上班族行程（上班、下班、社交）
+      - `balanced`: 平衡行程（學習、運動、社交）
+    
+    ## 輸出結果
+    - `success` (bool): 是否成功
+    - `message` (str): 結果訊息
+    - `total_agents` (int): 總代理人數量
+    - `success_count` (int): 成功安排行程的代理人數量
+    - `results` (List): 每個代理人的安排結果
+    """
+    try:
+        result = await life_simulation_manager.apply_schedule_to_all_agents(schedule_type)
+        return result
+        
+    except Exception as e:
+        logger.error(f"批量安排行程失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"批量安排行程失敗: {str(e)}")
+
+@app.post("/api/schedule/apply-to-agent/{agent_id}")
+async def apply_schedule_to_single_agent(agent_id: str, schedule_type: str = "balanced"):
+    """
+    為指定代理人安排每日行程
+    
+    ## 功能描述
+    為指定的代理人安排每日行程，讓他按照固定時間表執行日常活動。
+    
+    ## 輸入參數
+    - `agent_id` (str): 代理人ID
+    - `schedule_type` (str): 行程類型
+    
+    ## 輸出結果
+    - `success` (bool): 是否成功
+    - `message` (str): 結果訊息
+    - `schedule_id` (str): 行程ID
+    - `task_count` (int): 任務數量
+    """
+    try:
+        result = await life_simulation_manager.apply_schedule_to_agent(agent_id, schedule_type)
+        return result
+        
+    except Exception as e:
+        logger.error(f"安排代理人行程失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"安排代理人行程失敗: {str(e)}")
+
+@app.get("/api/schedule/agent/{agent_id}")
+async def get_agent_schedule(agent_id: str):
+    """
+    獲取指定代理人的行程安排
+    
+    ## 功能描述
+    獲取指定代理人的詳細行程安排，包括所有任務和當前執行狀態。
+    
+    ## 輸入參數
+    - `agent_id` (str): 代理人ID
+    
+    ## 輸出結果
+    - `agent_id` (str): 代理人ID
+    - `schedule_id` (str): 行程ID
+    - `is_active` (bool): 行程是否啟用
+    - `created_at` (str): 創建時間
+    - `tasks` (List): 任務列表
+    - `current_task` (Dict): 當前任務
+    """
+    try:
+        schedule_info = life_simulation_manager.get_agent_schedule(agent_id)
+        if not schedule_info:
+            raise HTTPException(status_code=404, detail=f"代理人 {agent_id} 沒有行程安排")
+        
+        return schedule_info
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"獲取代理人行程失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"獲取代理人行程失敗: {str(e)}")
+
+@app.get("/api/schedule/all")
+async def get_all_schedules():
+    """
+    獲取所有代理人的行程安排
+    
+    ## 功能描述
+    獲取所有代理人的行程安排概覽，包括有行程和沒有行程的代理人統計。
+    
+    ## 輸出結果
+    - `total_agents` (int): 總代理人數量
+    - `scheduled_agents` (int): 有行程的代理人數量
+    - `schedules` (Dict): 所有行程詳細資訊
+    """
+    try:
+        schedules_info = life_simulation_manager.get_all_schedules()
+        return schedules_info
+        
+    except Exception as e:
+        logger.error(f"獲取所有行程失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"獲取所有行程失敗: {str(e)}")
+
+@app.post("/api/schedule/toggle/{agent_id}")
+async def toggle_agent_schedule(agent_id: str, is_active: bool = None):
+    """
+    切換代理人的行程狀態
+    
+    ## 功能描述
+    啟用或停用指定代理人的行程安排。
+    
+    ## 輸入參數
+    - `agent_id` (str): 代理人ID
+    - `is_active` (bool, 可選): 是否啟用，如果不提供則切換當前狀態
+    
+    ## 輸出結果
+    - `success` (bool): 是否成功
+    - `message` (str): 結果訊息
+    - `is_active` (bool): 當前狀態
+    """
+    try:
+        result = life_simulation_manager.toggle_schedule(agent_id, is_active)
+        return result
+        
+    except Exception as e:
+        logger.error(f"切換行程狀態失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"切換行程狀態失敗: {str(e)}")
+
+@app.delete("/api/schedule/agent/{agent_id}")
+async def clear_agent_schedule(agent_id: str):
+    """
+    清除指定代理人的行程安排
+    
+    ## 功能描述
+    清除指定代理人的所有行程安排，讓他回到自主決策模式。
+    
+    ## 輸入參數
+    - `agent_id` (str): 代理人ID
+    
+    ## 輸出結果
+    - `success` (bool): 是否成功
+    - `message` (str): 結果訊息
+    """
+    try:
+        result = life_simulation_manager.clear_agent_schedule(agent_id)
+        return result
+        
+    except Exception as e:
+        logger.error(f"清除代理人行程失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"清除代理人行程失敗: {str(e)}")
+
+@app.delete("/api/schedule/clear-all")
+async def clear_all_schedules():
+    """
+    清除所有代理人的行程安排
+    
+    ## 功能描述
+    清除所有代理人的行程安排，讓他們都回到自主決策模式。
+    
+    ## 輸出結果
+    - `success` (bool): 是否成功
+    - `message` (str): 結果訊息
+    """
+    try:
+        result = life_simulation_manager.clear_all_schedules()
+        return result
+        
+    except Exception as e:
+        logger.error(f"清除所有行程失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"清除所有行程失敗: {str(e)}")
+
+@app.get("/api/schedule/templates")
+async def get_schedule_templates():
+    """
+    獲取可用的行程模板
+    
+    ## 功能描述
+    獲取所有可用的每日行程模板，包括學生、上班族和平衡型行程。
+    
+    ## 輸出結果
+    - `templates` (Dict): 行程模板列表
+    - `template_count` (int): 模板數量
+    """
+    try:
+        templates = life_simulation_manager.default_schedules
+        return {
+            "templates": templates,
+            "template_count": len(templates),
+            "available_types": list(templates.keys())
+        }
+        
+    except Exception as e:
+        logger.error(f"獲取行程模板失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"獲取行程模板失敗: {str(e)}")
+
+# =======================================================
 # 位置控制 API 端點
 # =======================================================
 
@@ -1461,15 +1879,16 @@ async def get_character_location_api(character_id: str):
 async def get_all_locations_api():
     """獲取所有可用位置"""
     try:
-        # 預設位置列表
-        locations = [
-            {"id": "home", "name": "家", "type": "Home", "position": {"x": 0.0, "y": 0.0}},
-            {"id": "school", "name": "學校", "type": "School", "position": {"x": 10.0, "y": 10.0}},
-            {"id": "workplace", "name": "工作場所", "type": "Workplace", "position": {"x": -10.0, "y": 5.0}},
-            {"id": "soccer_field", "name": "足球場", "type": "SoccerField", "position": {"x": 20.0, "y": -10.0}},
-            {"id": "restaurant", "name": "餐廳", "type": "Restaurant", "position": {"x": -5.0, "y": -5.0}},
-            {"id": "park", "name": "公園", "type": "Park", "position": {"x": 15.0, "y": 5.0}},
-        ]
+        # 使用 location_manager 獲取所有位置
+        locations = []
+        for location in location_manager.locations.values():
+            locations.append({
+                "id": location.id,
+                "name": location.name,
+                "type": location.type,
+                "position": location.position,
+                "description": location.description
+            })
         
         return {
             "success": True,
@@ -1479,6 +1898,123 @@ async def get_all_locations_api():
     except Exception as e:
         logger.error(f"獲取位置列表失敗: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"獲取位置列表失敗: {str(e)}")
+
+@app.get("/api/location/{location_id}")
+async def get_location_by_id_api(location_id: str):
+    """根據ID獲取特定位置資訊"""
+    try:
+        location = location_manager.get_location(location_id)
+        if not location:
+            raise HTTPException(status_code=404, detail=f"位置 {location_id} 不存在")
+        
+        return {
+            "success": True,
+            "location": {
+                "id": location.id,
+                "name": location.name,
+                "type": location.type,
+                "position": location.position,
+                "description": location.description
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"獲取位置資訊失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"獲取位置資訊失敗: {str(e)}")
+
+@app.get("/api/location/type/{location_type}")
+async def get_locations_by_type_api(location_type: str):
+    """根據類型獲取所有位置"""
+    try:
+        locations = location_manager.get_all_locations_by_type(location_type)
+        location_list = []
+        
+        for location in locations:
+            location_list.append({
+                "id": location.id,
+                "name": location.name,
+                "type": location.type,
+                "position": location.position,
+                "description": location.description
+            })
+        
+        return {
+            "success": True,
+            "location_type": location_type,
+            "total_count": len(location_list),
+            "locations": location_list
+        }
+    except Exception as e:
+        logger.error(f"獲取類型位置失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"獲取類型位置失敗: {str(e)}")
+
+@app.get("/api/location/character/{character_id}/preferred")
+async def get_character_preferred_locations_api(character_id: str):
+    """獲取角色的偏好位置"""
+    try:
+        memory = location_manager.get_character_memory(character_id)
+        if not memory:
+            return {
+                "success": True,
+                "character_id": character_id,
+                "message": "角色沒有位置記憶",
+                "preferred_locations": {}
+            }
+        
+        preferred_locations = {}
+        for location_type, location_id in memory.preferred_locations.items():
+            location = location_manager.get_location(location_id)
+            if location:
+                preferred_locations[location_type] = {
+                    "id": location.id,
+                    "name": location.name,
+                    "type": location.type,
+                    "position": location.position,
+                    "description": location.description
+                }
+        
+        return {
+            "success": True,
+            "character_id": character_id,
+            "preferred_locations": preferred_locations,
+            "known_locations": memory.known_locations,
+            "home_location": memory.home_location_id
+        }
+    except Exception as e:
+        logger.error(f"獲取角色偏好位置失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"獲取角色偏好位置失敗: {str(e)}")
+
+@app.post("/api/location/character/{character_id}/preferred")
+async def set_character_preferred_location_api(character_id: str, request: dict):
+    """設定角色的偏好位置"""
+    try:
+        location_type = request.get("location_type")
+        location_id = request.get("location_id")
+        
+        if not location_type or not location_id:
+            raise HTTPException(status_code=400, detail="缺少必要參數: location_type, location_id")
+        
+        # 檢查位置是否存在
+        location = location_manager.get_location(location_id)
+        if not location:
+            raise HTTPException(status_code=404, detail=f"位置 {location_id} 不存在")
+        
+        # 設定偏好位置
+        location_manager.set_character_preferred_location(character_id, location_type, location_id)
+        
+        return {
+            "success": True,
+            "message": f"已設定角色 {character_id} 的 {location_type} 偏好為 {location_id}",
+            "character_id": character_id,
+            "location_type": location_type,
+            "location_id": location_id
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"設定角色偏好位置失敗: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"設定角色偏好位置失敗: {str(e)}")
 
 # =======================================================
 # Unity專用對話API端點
@@ -1801,25 +2337,77 @@ async def get_unity_memory_stats():
 # 火災模擬 API 端點
 # =======================================================
 
+# 火災模擬房間名稱與前端地圖代碼對應
+# 布局：上排(A1-A4): 臥室A、臥室B、臥室C、浴室
+#       中間(B1-B4): 走廊（貫穿）
+#       下排(C1-C4): 客廳、廚房、大門(出口)、空
+FIRE_SIMULATION_ROOM_ID_MAP: Dict[str, str] = {
+    "臥室A": "A1",
+    "臥室B": "A2",
+    "臥室C": "A3",
+    "浴室": "A4",
+    "走廊": "B2",  # 下排第一個位置，跨2列
+    "客廳": "C1",
+    "廚房": "C2",
+    "大門": "C3"
+}
+def _room_name_to_id(room_name: str) -> str:
+    return FIRE_SIMULATION_ROOM_ID_MAP.get(room_name, room_name)
+
+
+def _normalize_agent_for_stream(agent: Dict[str, Any]) -> Dict[str, Any]:
+    agent_payload = agent.copy()
+    original_room = agent.get("current_room") or agent.get("location")
+    room_id = _room_name_to_id(original_room)
+    agent_payload["current_room"] = room_id
+    agent_payload["location_id"] = room_id
+    agent_payload["current_room_name"] = original_room
+    # 保留語言行為與簡化行為（若存在）
+    if "語言行為" in agent:
+        agent_payload["語言行為"] = agent["語言行為"]
+    if "簡化行為" in agent:
+        agent_payload["簡化行為"] = agent["簡化行為"]
+    # 英文別名，方便未來前端使用
+    if "language_behavior" in agent:
+        agent_payload["language_behavior"] = agent["language_behavior"]
+    if "simplified_behavior" in agent:
+        agent_payload["simplified_behavior"] = agent["simplified_behavior"]
+    return agent_payload
+
+
+def _normalize_rooms_for_stream(rooms: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    normalized: Dict[str, Dict[str, Any]] = {}
+    for name, data in rooms.items():
+        room_id = _room_name_to_id(name)
+        room_payload = data.copy()
+        room_payload["id"] = room_id
+        room_payload["display_name"] = name
+        room_payload["fire_level"] = 1 if room_payload.get("on_fire") else 0
+        smoke_value = room_payload.get("smoke")
+        if isinstance(smoke_value, (int, float)):
+            room_payload["smoke_level"] = smoke_value
+        else:
+            room_payload["smoke_level"] = 1 if smoke_value else 0
+        normalized[room_id] = room_payload
+    return normalized
+
+
+class CustomAgentConfig(BaseModel):
+    persona_id: str
+    name: str
+    initial_room: str = "客廳"
+
 class FireSimulationRequest(BaseModel):
     num_agents: int = 5
     max_rounds: int = 15
     simulation_speed: Optional[float] = 1.0
+    fire_start_room: Optional[str] = "廚房"  # 起火房間名稱
+    custom_agents: Optional[List[CustomAgentConfig]] = None  # 自訂代理人配置
 
 class FireSimulationResponse(BaseModel):
     simulation_id: str
     status: str
     message: str
-
-@app.get("/fire-simulation")
-async def serve_fire_simulation_ui():
-    """提供火災模擬 UI 頁面 (Polling版本)"""
-    return FileResponse("fire_simulation.html", media_type="text/html")
-
-@app.get("/fire-simulation-sse")
-async def serve_fire_simulation_sse_ui():
-    """提供火災模擬 UI 頁面 (SSE版本)"""
-    return FileResponse("fire_simulation_sse.html", media_type="text/html")
 
 @app.post("/start-fire-simulation", response_model=FireSimulationResponse)
 async def start_fire_simulation(request: FireSimulationRequest):
@@ -1843,13 +2431,25 @@ async def start_fire_simulation(request: FireSimulationRequest):
             "finished": False
         }
         
+        # 設定起火點
+        simulator.fire_start_room = request.fire_start_room or "廚房"
+        
+        # 準備自訂代理人配置（如果有的話）
+        custom_agents_config = None
+        if request.custom_agents:
+            custom_agents_config = [
+                {"persona_id": agent.persona_id, "initial_room": agent.initial_room}
+                for agent in request.custom_agents
+            ]
+        
         # 在背景執行模擬
         asyncio.create_task(run_fire_simulation_background(
             simulation_id, 
             simulator, 
             request.num_agents, 
             request.max_rounds,
-            request.simulation_speed or 1.0
+            request.simulation_speed or 1.0,
+            custom_agents_config
         ))
         
         return FireSimulationResponse(
@@ -1863,13 +2463,17 @@ async def start_fire_simulation(request: FireSimulationRequest):
         raise HTTPException(status_code=500, detail=f"啟動模擬失敗: {str(e)}")
 
 async def run_fire_simulation_background(simulation_id: str, simulator: FireScenarioSimulator, 
-                                       num_agents: int, max_rounds: int, speed: float):
+                                       num_agents: int, max_rounds: int, speed: float,
+                                       custom_agents_config: Optional[List[Dict]] = None):
     """在背景執行火災模擬"""
     try:
         sim_data = active_simulations[simulation_id]
         
-        # 建立代理人
-        await simulator.create_agents_from_database(num_agents)
+        # 建立代理人（支援自訂配置）
+        if custom_agents_config:
+            await simulator.create_agents_from_config(custom_agents_config)
+        else:
+            await simulator.create_agents_from_database(num_agents)
         
         # 開始模擬循環
         for round_num in range(max_rounds):
@@ -1894,7 +2498,17 @@ async def run_fire_simulation_background(simulation_id: str, simulator: FireScen
                     "injured": agent.injured,
                     "status": "已逃生" if agent.escaped else ("受傷" if agent.injured else "危險中"),
                     "current_action": getattr(agent, 'current_action', '等待中...'),
-                    "traits": agent.traits
+                    "traits": agent.traits,
+                    "social_abilities": getattr(agent, 'social_abilities', []),
+                    "ability_attributes": getattr(agent, 'ability_attributes', []),
+                    # 即時監控：內心獨白與記憶片段
+                    "internal_monologue": getattr(agent, 'internal_monologue', ""),
+                    "memory_snippet": getattr(agent, 'memory_snippet', ""),
+                    # 新增語言行為與簡化行為（提供中英文鍵）
+                    "語言行為": agent.persona_data.get("語言行為"),
+                    "簡化行為": agent.persona_data.get("簡化行為"),
+                    "language_behavior": agent.persona_data.get("語言行為"),
+                    "simplified_behavior": agent.persona_data.get("簡化行為")
                 }
                 for agent in simulator.agents
             ]
@@ -1991,11 +2605,19 @@ async def get_simulation_stream(simulation_id: str):
                         # 準備發送的資料
                         new_events = current_events[last_events_count:] if len(current_events) > last_events_count else []
                         
+                        normalized_agents = [
+                            _normalize_agent_for_stream(agent)
+                            for agent in sim_data.get("agents_data", [])
+                        ]
+                        normalized_rooms = _normalize_rooms_for_stream(
+                            sim_data.get("rooms_data", {})
+                        )
+
                         update_data = {
                             "tick": current_tick,
                             "status": current_status,
-                            "agents": sim_data.get("agents_data", []),
-                            "rooms": sim_data.get("rooms_data", {}),
+                            "agents": normalized_agents,
+                            "rooms": normalized_rooms,
                             "events": new_events,
                             "finished": sim_data.get("finished", False)
                         }

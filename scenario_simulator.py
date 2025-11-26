@@ -68,6 +68,12 @@ class Agent:
         self.injured = False
         self.can_move = True
         self.current_action = "初始化中..."  # 當前行動描述
+        # 可視化監控：內心獨白與記憶片段
+        self.internal_monologue: str = ""
+        self.memory_snippet: str = ""
+        # 新增：允許逃生後重返救援
+        self.allow_reentry: bool = True
+        self.reentered_times: int = 0
         
         # 互動記錄
         self.log = []
@@ -122,6 +128,7 @@ class FireScenarioSimulator:
         self.agents = []
         self.tick = 0
         self.simulation_log = []
+        self.fire_start_room = "廚房"  # 預設起火房間
         
     async def initialize(self):
         """初始化所有模組"""
@@ -151,21 +158,23 @@ class FireScenarioSimulator:
             '臥室C': Room('臥室C'),
             '走廊': Room('走廊'),
             '浴室': Room('浴室'),
-            '大門': Room('大門', is_exit=True),
-            '陽台': Room('陽台', is_exit=True)
+            '大門': Room('大門', is_exit=True)
         }
         
-        # 房間連接圖
+        # 房間連接圖（根據實際平面圖）
+        # 上排房間（臥室A、B、C、浴室）都連接到走廊
+        # 下排房間（客廳、廚房、大門）也連接到走廊
+        # 客廳和廚房相鄰
+        # 廚房和大門相鄰
         self.connections = {
-            '客廳': ['廚房', '走廊', '陽台'],
-            '廚房': ['客廳'],
             '臥室A': ['走廊'],
             '臥室B': ['走廊'],
             '臥室C': ['走廊'],
-            '走廊': ['客廳', '臥室A', '臥室B', '臥室C', '浴室', '大門'],
             '浴室': ['走廊'],
-            '大門': ['走廊'],
-            '陽台': ['客廳']
+            '走廊': ['臥室A', '臥室B', '臥室C', '浴室', '客廳', '廚房', '大門'],
+            '客廳': ['走廊', '廚房'],
+            '廚房': ['走廊', '客廳', '大門'],
+            '大門': ['走廊', '廚房']
         }
 
     async def create_agents_from_database(self, num_agents=5):
@@ -177,8 +186,8 @@ class FireScenarioSimulator:
         else:
             selected_personas = random.sample(all_personas, num_agents)
         
-        # 隨機分配初始位置
-        possible_locations = ['客廳', '臥室A', '臥室B', '臥室C', '廚房']
+        # 隨機分配初始位置（不包括出口和走廊）
+        possible_locations = ['客廳', '臥室A', '臥室B', '臥室C', '廚房', '浴室']
         
         self.agents = []
         for persona in selected_personas:
@@ -190,6 +199,51 @@ class FireScenarioSimulator:
             self.rooms[initial_location].agents.append(agent.id)
             
             logger.info(f"建立代理人: {agent.name} (位於 {initial_location})")
+            
+        return self.agents
+
+    async def create_agents_from_config(self, agents_config: List[Dict]):
+        """根據自訂配置建立代理人
+        
+        Args:
+            agents_config: 代理人配置列表，每個配置包含:
+                - persona_id: 人格ID
+                - initial_room: 初始房間位置
+        """
+        all_personas = self.persona_loader.get_all_personas()
+        
+        # 有效的房間列表
+        valid_rooms = list(self.rooms.keys())
+        
+        self.agents = []
+        for config in agents_config:
+            persona_id = config.get('persona_id')
+            initial_room = config.get('initial_room', '客廳')
+            
+            # 驗證人格是否存在
+            if persona_id not in all_personas:
+                logger.warning(f"找不到人格 ID: {persona_id}，跳過")
+                continue
+            
+            persona = all_personas[persona_id]
+            
+            # 驗證房間是否有效
+            if initial_room not in valid_rooms:
+                logger.warning(f"無效的房間: {initial_room}，使用預設房間 '客廳'")
+                initial_room = '客廳'
+            
+            # 建立代理人
+            agent = Agent(persona_id, persona, initial_room)
+            self.agents.append(agent)
+            
+            # 更新房間內代理人列表
+            self.rooms[initial_room].agents.append(agent.id)
+            
+            logger.info(f"建立代理人: {agent.name} (位於 {initial_room})")
+        
+        if not self.agents:
+            logger.warning("沒有成功建立任何代理人，使用隨機選擇")
+            await self.create_agents_from_database(5)
             
         return self.agents
 
@@ -210,6 +264,29 @@ class FireScenarioSimulator:
             except:
                 retrieved_docs = []
             
+            # 內部工具：簡單字串裁切
+            def _trim_text(text: str, max_len: int) -> str:
+                if not text:
+                    return ""
+                text = str(text).replace('\n', ' ').strip()
+                return (text[:max_len] + '…') if len(text) > max_len else text
+
+            # 從檢索結果擷取記憶片段（10~20字，這裡選擇最長20字）
+            memory_snippet = ""
+            if retrieved_docs:
+                try:
+                    # 嘗試抓第一筆文件的主要內容
+                    first_doc = retrieved_docs[0]
+                    # 常見物件：有 page_content 屬性 或 字典 或 一般字串
+                    if hasattr(first_doc, 'page_content'):
+                        memory_snippet = _trim_text(getattr(first_doc, 'page_content', ''), 20)
+                    elif isinstance(first_doc, dict):
+                        memory_snippet = _trim_text(first_doc.get('page_content') or first_doc.get('content') or first_doc.get('text') or "", 20)
+                    else:
+                        memory_snippet = _trim_text(str(first_doc), 20)
+                except Exception:
+                    memory_snippet = _trim_text(str(retrieved_docs[0]), 20)
+
             context = f"""
 當前情境: {situation_context}
 你的位置: {agent.location} ({current_room})
@@ -223,23 +300,60 @@ class FireScenarioSimulator:
 
             from module.prompt_loader import get_system_prompt, get_user_prompt
             
+            # 格式化 retrieved_docs 為字符串
+            retrieved_docs_str = '無特別記憶'
+            if retrieved_docs:
+                docs_list = retrieved_docs[:2]
+                if docs_list:
+                    retrieved_docs_str = '\n'.join([str(doc) for doc in docs_list])
+            
+            # 格式化 recent_messages 為字符串
+            recent_messages_str = '無'
+            if agent.messages_received:
+                recent_msgs = agent.messages_received[-3:]
+                recent_messages_str = ', '.join([msg.get('message', str(msg)) if isinstance(msg, dict) else str(msg) for msg in recent_msgs])
+            
+            # 風險評估
+            room_temp = getattr(current_room, 'temperature', 25)
+            room_vis = getattr(current_room, 'visibility', 100)
+            room_on_fire = getattr(current_room, 'on_fire', False)
+            room_smoke = getattr(current_room, 'smoke', False)
+            risk_score = 0
+            if room_on_fire: risk_score += 2
+            if room_temp > 150: risk_score += 2
+            if room_vis < 20: risk_score += 2
+            if agent.panic_level >= 80: risk_score += 1
+            if agent.health <= 20: risk_score += 2
+            risk_level = 'low'
+            if risk_score >= 6:
+                risk_level = 'critical'
+            elif risk_score >= 3:
+                risk_level = 'high'
+            elif risk_score >= 1:
+                risk_level = 'medium'
+
             system_content = get_system_prompt("agent_decision_making",
                                              agent_name=agent.name,
-                                             traits=agent.traits,
-                                             social_abilities=agent.social_abilities,
-                                             ability_attributes=agent.ability_attributes,
-                                             retrieved_docs=retrieved_docs[:2] if retrieved_docs else '無特別記憶')
+                                             traits=str(agent.traits) if isinstance(agent.traits, (list, dict)) else agent.traits,
+                                             social_abilities=str(agent.social_abilities) if isinstance(agent.social_abilities, (list, dict)) else agent.social_abilities,
+                                             ability_attributes=str(agent.ability_attributes) if isinstance(agent.ability_attributes, (list, dict)) else agent.ability_attributes,
+                                             retrieved_docs=retrieved_docs_str)
             
             user_content = get_user_prompt("agent_decision_making",
                                          situation_context=situation_context,
                                          location=agent.location,
-                                         current_room=current_room,
+                                         current_room=str(current_room),
                                          available_exits=', '.join(available_exits),
-                                         other_agents=[a.name for a in other_agents_here],
+                                         other_agents=', '.join([a.name for a in other_agents_here]) if other_agents_here else '無',
                                          panic_level=agent.panic_level,
                                          health=agent.health,
                                          known_fire=agent.known_fire,
-                                         recent_messages=agent.messages_received[-3:] if agent.messages_received else '無')
+                                         recent_messages=recent_messages_str,
+                                         risk_level=risk_level,
+                                         room_temperature=room_temp,
+                                         visibility=room_vis,
+                                         on_fire=room_on_fire,
+                                         smoke=room_smoke)
 
             prompt = [
                 {"role": "system", "content": system_content},
@@ -258,10 +372,69 @@ class FireScenarioSimulator:
                     response = response[4:].strip()
                 
                 decision = json.loads(response)
+                # 產生精簡 10 字內獨白（根據行為與環境）
+                def _generate_short_monologue(a: Agent, d: Dict) -> str:
+                    # 多樣化短語，依狀態／行為與隨機性
+                    import random
+                    if a.escaped:
+                        # 已逃生仍可返回救援
+                        return "已逃生"
+                    if a.injured:
+                        return "受傷" if a.health > 0 else "倒地"
+                    action = d.get('action', '')
+                    room_state = self.rooms.get(a.location, None)
+                    local_hazard = False
+                    if room_state:
+                        # 只用本地可見危險（著火/煙霧/能見度低/溫度高）作為危險依據
+                        local_hazard = (
+                            getattr(room_state, 'on_fire', False) or
+                            getattr(room_state, 'smoke', False) or
+                            getattr(room_state, 'visibility', 100) < 20 or
+                            getattr(room_state, 'temperature', 25) > 150
+                        )
+                    # 在危險時，加入隨機多樣化
+                    if local_hazard:
+                        if action == 'help_others':
+                            return random.choice(["我要救人", "先救人"])
+                        if action == 'shout':
+                            return random.choice(["呼救", "求援"])
+                        if action == 'search':
+                            return random.choice(["找出口", "搜尋出口"])
+                        if action == 'move':
+                            return random.choice(["快逃", "逃離火場"])
+                        if action == 'stay':
+                            return random.choice(["危險", "等一下"])
+                        # 未知行為 fallback
+                        return random.choice(["危險", "快逃", "呼救"]) 
+                    # 沒有本地危險，但如果僅僅是收到警告（known_fire）則保持提醒語氣
+                    if getattr(a, 'known_fire', False):
+                        if action == 'shout':
+                            return "警告火災"
+                        if action == 'move':
+                            return "小心前進"
+                        return random.choice(["注意", "小心"]) 
+                    # 非危險情境
+                    if action == 'search':
+                        return "找出口"
+                    if action == 'help_others':
+                        return random.choice(["我要救人", "先救人"])
+                    if action == 'shout':
+                        return "呼救"
+                    if action == 'move':
+                        return "移動"
+                    if action == 'stay':
+                        return "目前安全"
+                    return "等待"
+                agent.internal_monologue = _trim_text(_generate_short_monologue(agent, decision), 10)
+                # 保留原本記憶片段欄位，即使前端不顯示
+                agent.memory_snippet = memory_snippet
                 return decision
             except json.JSONDecodeError:
                 # 如果解析失敗，返回預設行為
                 logger.warning(f"{agent.name} 決策解析失敗，使用預設行為")
+                # 簡化失敗提示
+                agent.internal_monologue = _trim_text("等待", 10)
+                agent.memory_snippet = memory_snippet
                 return {
                     "action": "move" if agent.known_fire else "stay",
                     "target": random.choice(available_exits) if agent.known_fire else agent.location,
@@ -271,6 +444,12 @@ class FireScenarioSimulator:
                 
         except Exception as e:
             logger.error(f"代理人 {agent.name} 決策失敗: {e}")
+            # 決策錯誤時也維持最新的記憶片段供可視化
+            try:
+                agent.memory_snippet = memory_snippet if 'memory_snippet' in locals() else ""
+            except Exception:
+                pass
+            agent.internal_monologue = _trim_text("錯誤", 10)
             return {
                 "action": "stay",
                 "target": agent.location,
@@ -284,6 +463,12 @@ class FireScenarioSimulator:
         target = decision.get("target", "")
         message = decision.get("message", "")
         reasoning = decision.get("reasoning", "")
+        # 在執行前套用安全校正
+        decision = self.validate_and_adjust_decision(agent, decision)
+        action = decision.get("action", action)
+        target = decision.get("target", target)
+        message = decision.get("message", message)
+        reasoning = decision.get("reasoning", reasoning)
         
         if action == "move" and target in self.connections[agent.location]:
             # 移動
@@ -292,13 +477,20 @@ class FireScenarioSimulator:
             agent.location = target
             self.rooms[target].agents.append(agent.id)
             
-            if target in ['大門', '陽台']:
+            if target in ['大門']:
                 agent.escaped = True
                 agent.current_action = f"已逃生到{target}"
                 agent.add_log(self.tick, "逃生成功", f"從 {old_location} 逃到 {target}")
             else:
-                agent.current_action = f"移動到{target}"
-                agent.add_log(self.tick, "移動", f"從 {old_location} 到 {target}, 理由: {reasoning}")
+                # 若原本已逃生，現在移動回室內，取消逃生狀態
+                if agent.escaped and agent.allow_reentry:
+                    agent.escaped = False
+                    agent.reentered_times += 1
+                    agent.current_action = f"返回{target}救援"
+                    agent.add_log(self.tick, "返回救援", f"從 {old_location} 進入 {target}, 理由: {reasoning}")
+                else:
+                    agent.current_action = f"移動到{target}"
+                    agent.add_log(self.tick, "移動", f"從 {old_location} 到 {target}, 理由: {reasoning}")
                 
         elif action == "shout" and message:
             # 呼救或警告
@@ -335,6 +527,69 @@ class FireScenarioSimulator:
             
         agent.last_action = decision
 
+    def validate_and_adjust_decision(self, agent: Agent, decision: Dict) -> Dict:
+        """在高風險情境下對 LLM 決策做安全校正"""
+        try:
+            room = self.rooms.get(agent.location)
+            if not room:
+                return decision
+            temp = getattr(room, 'temperature', 25)
+            vis = getattr(room, 'visibility', 100)
+            on_fire = getattr(room, 'on_fire', False)
+            smoke = getattr(room, 'smoke', False)
+            # 僅以本地環境危險觸發安全校正，避免僅憑訊息或恐慌就強制撤離
+            danger = on_fire or smoke or temp > 150 or vis < 20
+            if not danger:
+                return decision
+            # 危險時若選了高風險行為，強制轉為移動至較安全處
+            action = decision.get('action', 'stay')
+            if action in ['help_others', 'stay', 'search', 'shout', 'panic']:
+                safe_target = self._choose_safer_target(agent)
+                if safe_target:
+                    return {
+                        "action": "move",
+                        "target": safe_target,
+                        "message": decision.get('message', ''),
+                        "reasoning": "高風險自動改為優先撤離"
+                    }
+                else:
+                    # 若無路可走，至少呼救
+                    return {
+                        "action": "shout",
+                        "target": decision.get('target', ''),
+                        "message": "這裡著火！需要協助！",
+                        "reasoning": "無安全路徑，改為呼救"
+                    }
+            return decision
+        except Exception:
+            return decision
+
+    def _choose_safer_target(self, agent: Agent) -> Optional[str]:
+        """從目前房間的連接中挑選較安全且更接近出口的目標"""
+        neighbors = self.connections.get(agent.location, [])
+        if not neighbors:
+            return None
+        # 排序偏好：大門 > 走廊 > 非著火無煙房 > 其他
+        def room_score(name: str) -> int:
+            if name == '大門':
+                return 100
+            if name == '走廊':
+                return 80
+            r = self.rooms.get(name)
+            if not r:
+                return 0
+            score = 50
+            if not r.on_fire:
+                score += 20
+            if not r.smoke:
+                score += 10
+            # 低溫高能見度更好
+            score += max(0, 30 - max(0, getattr(r, 'temperature', 25) - 100) // 10)
+            score += min(20, getattr(r, 'visibility', 100) // 10)
+            return score
+        best = sorted(neighbors, key=lambda n: room_score(n), reverse=True)
+        return best[0] if best else None
+
     async def fire_scenario_tick(self):
         """執行一個時間刻度的事件"""
         self.tick += 1
@@ -342,40 +597,59 @@ class FireScenarioSimulator:
         
         # 1. 環境事件
         if self.tick == 1:
-            self.rooms['廚房'].on_fire = True
-            self.rooms['廚房'].smoke = True
-            tick_log.append(f"[環境] 廚房起火！產生濃煙")
+            # 使用配置的起火房間
+            fire_room = self.fire_start_room if self.fire_start_room in self.rooms else "廚房"
+            self.rooms[fire_room].on_fire = True
+            self.rooms[fire_room].smoke = True
+            self.rooms[fire_room].temperature = 200  # 起火房間溫度升高
+            tick_log.append(f"[環境] {fire_room}起火！產生濃煙")
+        
+        # 2. 動態火災蔓延機制（Tick 2+）
+        if self.tick >= 2:
+            # 2.1 煙霧蔓延：從所有著火房間和有煙霧的房間擴散
+            smoke_sources = [
+                name for name, room in self.rooms.items() 
+                if room.on_fire or room.smoke
+            ]
             
-        elif self.tick == 2:
-            self.rooms['客廳'].smoke = True
-            tick_log.append(f"[環境] 煙霧蔓延到客廳")
-            
-        elif self.tick == 3:
-            self.rooms['走廊'].smoke = True
-            tick_log.append(f"[環境] 煙霧蔓延到走廊")
-            
-        elif self.tick == 4:
-            self.rooms['廚房'].temperature = 200
-            self.rooms['客廳'].on_fire = True
-            tick_log.append(f"[環境] 火勢蔓延到客廳！")
-            
-        elif self.tick >= 5:
-            # 火勢隨機蔓延
-            fire_rooms = [name for name, room in self.rooms.items() if room.on_fire]
-            for room_name in fire_rooms:
-                connected_rooms = self.connections[room_name]
+            for source_room in smoke_sources:
+                connected_rooms = self.connections[source_room]
                 for connected in connected_rooms:
-                    if not self.rooms[connected].on_fire and random.random() < 0.3:
-                        self.rooms[connected].on_fire = True
-                        tick_log.append(f"[環境] 火勢蔓延到{connected}！")
+                    # 如果相鄰房間還沒有煙霧，有一定機率產生煙霧
+                    if not self.rooms[connected].smoke:
+                        # 如果源房間著火，煙霧蔓延機率較高；如果只是有煙霧，機率較低
+                        smoke_probability = 0.6 if self.rooms[source_room].on_fire else 0.3
+                        if random.random() < smoke_probability:
+                            self.rooms[connected].smoke = True
+                            tick_log.append(f"[環境] 煙霧從{source_room}蔓延到{connected}")
+            
+            # 2.2 火勢蔓延：從所有著火房間蔓延
+            fire_rooms = [name for name, room in self.rooms.items() if room.on_fire]
+            
+            for fire_room in fire_rooms:
+                connected_rooms = self.connections[fire_room]
+                for connected in connected_rooms:
+                    # 大門是出口，不能著火（讓代理人有機會逃生）
+                    if self.rooms[connected].is_exit:
+                        continue
+                    # 如果相鄰房間還沒著火，有一定機率蔓延
+                    if not self.rooms[connected].on_fire:
+                        # 如果相鄰房間已經有煙霧，火勢蔓延機率較高
+                        fire_probability = 0.4 if self.rooms[connected].smoke else 0.2
+                        if random.random() < fire_probability:
+                            self.rooms[connected].on_fire = True
+                            self.rooms[connected].smoke = True  # 著火時同時產生煙霧
+                            self.rooms[connected].temperature = 200  # 溫度升高
+                            tick_log.append(f"[環境] 火勢從{fire_room}蔓延到{connected}！")
                         
-        # 2. 更新環境狀態
+        # 3. 更新環境狀態
         for room in self.rooms.values():
             room.update_environment(self.tick)
             
-        # 3. 代理人感知與決策
+        # 4. 代理人感知與決策
         for agent in self.agents:
-            if agent.escaped or agent.injured:
+            # 受傷者不再行動；已逃生者允許在 allow_reentry==True 的前提下繼續決策（可返回救援）
+            if agent.injured:
                 continue
                 
             current_room = self.rooms[agent.location]

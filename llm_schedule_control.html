@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM 智能排程系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            padding: 30px;
+        }
+
+        .section {
+            margin-bottom: 40px;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 5px solid #4facfe;
+        }
+
+        .section h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+        }
+
+        .section h2::before {
+            content: "🤖";
+            margin-right: 10px;
+            font-size: 1.2em;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #4facfe;
+            box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+        }
+
+        .result-container {
+            margin-top: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e1e5e9;
+        }
+
+        .activity-card {
+            background: white;
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .activity-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+
+        .activity-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .activity-name {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .activity-time {
+            background: #4facfe;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .activity-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .activity-detail {
+            display: flex;
+            align-items: center;
+        }
+
+        .activity-detail strong {
+            margin-right: 8px;
+            color: #666;
+        }
+
+        .activity-reasoning {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+            font-style: italic;
+            color: #666;
+            border-left: 3px solid #4facfe;
+        }
+
+        .personality-card {
+            background: white;
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .personality-traits {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .trait-tag {
+            background: #4facfe;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .error {
+            background: #ffe6e6;
+            color: #d63031;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #d63031;
+            margin-top: 10px;
+        }
+
+        .success {
+            background: #e6ffe6;
+            color: #00b894;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #00b894;
+            margin-top: 10px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 10px;
+            }
+            
+            .main-content {
+                padding: 20px;
+            }
+            
+            .header {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 LLM 智能排程系統</h1>
+            <p>利用人工智慧為角色生成個性化的日常活動安排</p>
+        </div>
+
+        <div class="main-content">
+            <!-- 人物選擇區 -->
+            <div class="section">
+                <h2>選擇角色</h2>
+                <div class="form-group">
+                    <label for="personaSelect">選擇要安排的角色：</label>
+                    <select id="personaSelect">
+                        <option value="">請選擇角色...</option>
+                        <option value="687a1b2d5b">王美鳳</option>
+                        <option value="867b21d0fe">何素珍</option>
+                        <option value="eef4720230">呂志強</option>
+                    </select>
+                </div>
+                <button class="btn" onclick="loadPersonalityProfile()">載入角色檔案</button>
+                
+                <div id="personalityResult"></div>
+            </div>
+
+            <!-- 單個活動生成 -->
+            <div class="section">
+                <h2>生成單個活動</h2>
+                <div class="grid">
+                    <div>
+                        <div class="form-group">
+                            <label for="timeSlot">時間段：</label>
+                            <input type="text" id="timeSlot" placeholder="例如：上午、下午、晚上" value="現在">
+                        </div>
+                        <div class="form-group">
+                            <label for="duration">持續時間（分鐘）：</label>
+                            <input type="number" id="duration" value="60" min="5" max="480">
+                        </div>
+                    </div>
+                    <div>
+                        <div class="form-group">
+                            <label for="weather">天氣：</label>
+                            <select id="weather">
+                                <option value="晴朗">晴朗</option>
+                                <option value="多雲">多雲</option>
+                                <option value="雨天">雨天</option>
+                                <option value="雪天">雪天</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="constraints">限制條件：</label>
+                            <textarea id="constraints" placeholder="例如：必須在室內、需要與他人互動等" rows="3"></textarea>
+                        </div>
+                    </div>
+                </div>
+                
+                <button class="btn" onclick="generateSingleActivity()">🎯 生成活動</button>
+                
+                <div id="singleActivityResult"></div>
+            </div>
+
+            <!-- 一日排程生成 -->
+            <div class="section">
+                <h2>生成一日排程</h2>
+                <div class="form-group">
+                    <label for="scheduleDate">日期：</label>
+                    <input type="date" id="scheduleDate">
+                </div>
+                
+                <button class="btn" onclick="generateDailySchedule()">📅 生成一日排程</button>
+                <button class="btn btn-secondary" onclick="applyScheduleToAgent()">✅ 應用到角色</button>
+                
+                <div id="dailyScheduleResult"></div>
+            </div>
+
+            <!-- 控制區 -->
+            <div class="section">
+                <h2>系統控制</h2>
+                <button class="btn" onclick="startLifeSimulation()">🚀 啟動生活模擬</button>
+                <button class="btn btn-secondary" onclick="getAgentStatus()">📊 查看角色狀態</button>
+                <button class="btn btn-danger" onclick="clearAllSchedules()">🗑️清除所有排程</button>
+                
+                <div id="controlResult"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '';
+
+        // 設定今天的日期
+        document.getElementById('scheduleDate').value = new Date().toISOString().split('T')[0];
+
+        async function loadPersonalityProfile() {
+            const personaId = document.getElementById('personaSelect').value;
+            if (!personaId) {
+                alert('請先選擇角色');
+                return;
+            }
+
+            const resultDiv = document.getElementById('personalityResult');
+            resultDiv.innerHTML = '<div class="loading">載入角色檔案中...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/llm-schedule/personality/${personaId}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const profile = data.profile;
+                    resultDiv.innerHTML = `
+                        <div class="personality-card">
+                            <h3>👤 ${profile.name} 的個性檔案</h3>
+                            <div class="activity-details">
+                                <div class="activity-detail">
+                                    <strong>年齡:</strong> ${profile.age}
+                                </div>
+                                <div class="activity-detail">
+                                    <strong>職業:</strong> ${profile.occupation}
+                                </div>
+                                <div class="activity-detail">
+                                    <strong>能量模式:</strong> ${profile.energy_pattern}
+                                </div>
+                                <div class="activity-detail">
+                                    <strong>社交程度:</strong> ${profile.social_level}
+                                </div>
+                            </div>
+                            <div>
+                                <strong>個性特徵:</strong>
+                                <div class="personality-traits">
+                                    ${profile.personality_traits.map(trait => `<span class="trait-tag">${trait}</span>`).join('')}
+                                </div>
+                            </div>
+                            <div style="margin-top: 10px;">
+                                <strong>興趣愛好:</strong>
+                                <div class="personality-traits">
+                                    ${profile.interests.map(interest => `<span class="trait-tag">${interest}</span>`).join('')}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = '<div class="error">載入角色檔案失敗</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">錯誤: ${error.message}</div>`;
+            }
+        }
+
+        async function generateSingleActivity() {
+            const personaId = document.getElementById('personaSelect').value;
+            if (!personaId) {
+                alert('請先選擇角色');
+                return;
+            }
+
+            const resultDiv = document.getElementById('singleActivityResult');
+            resultDiv.innerHTML = '<div class="loading">🤖 AI 正在生成活動...</div>';
+
+            const requestData = {
+                persona_id: personaId,
+                time_slot: document.getElementById('timeSlot').value,
+                duration_minutes: parseInt(document.getElementById('duration').value),
+                weather: document.getElementById('weather').value,
+                constraints: document.getElementById('constraints').value.split('\n').filter(c => c.trim())
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/api/llm-schedule/generate-activity`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestData)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    const activity = data.activity;
+                    resultDiv.innerHTML = `
+                        <div class="result-container">
+                            <div class="activity-card">
+                                <div class="activity-header">
+                                    <div class="activity-name">🎯 ${activity.name}</div>
+                                    <div class="activity-time">${activity.duration} 分鐘</div>
+                                </div>
+                                <div class="activity-details">
+                                    <div class="activity-detail">
+                                        <strong>類型:</strong> ${activity.activity_type}
+                                    </div>
+                                    <div class="activity-detail">
+                                        <strong>地點:</strong> ${activity.location}
+                                    </div>
+                                    <div class="activity-detail">
+                                        <strong>優先級:</strong> ${(activity.priority * 100).toFixed(0)}%
+                                    </div>
+                                </div>
+                                <div class="activity-reasoning">
+                                    <strong>AI 推理:</strong> ${activity.reasoning}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = '<div class="error">生成活動失敗</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">錯誤: ${error.message}</div>`;
+            }
+        }
+
+        async function generateDailySchedule() {
+            const personaId = document.getElementById('personaSelect').value;
+            if (!personaId) {
+                alert('請先選擇角色');
+                return;
+            }
+
+            const resultDiv = document.getElementById('dailyScheduleResult');
+            resultDiv.innerHTML = '<div class="loading">🤖 AI 正在生成一日排程...</div>';
+
+            const requestData = {
+                persona_id: personaId,
+                date: document.getElementById('scheduleDate').value
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/api/llm-schedule/generate-daily`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestData)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    const schedule = data.schedule;
+                    let scheduleHTML = `
+                        <div class="result-container">
+                            <h3>📅 ${data.date} 的一日排程 (共 ${data.total_activities} 個活動)</h3>
+                    `;
+
+                    schedule.forEach(activity => {
+                        scheduleHTML += `
+                            <div class="activity-card">
+                                <div class="activity-header">
+                                    <div class="activity-name">⏰ ${activity.name}</div>
+                                    <div class="activity-time">${activity.start_time} - ${activity.end_time}</div>
+                                </div>
+                                <div class="activity-details">
+                                    <div class="activity-detail">
+                                        <strong>類型:</strong> ${activity.activity_type}
+                                    </div>
+                                    <div class="activity-detail">
+                                        <strong>地點:</strong> ${activity.location}
+                                    </div>
+                                    <div class="activity-detail">
+                                        <strong>持續:</strong> ${activity.duration} 分鐘
+                                    </div>
+                                    <div class="activity-detail">
+                                        <strong>優先級:</strong> ${(activity.priority * 100).toFixed(0)}%
+                                    </div>
+                                </div>
+                                <div class="activity-reasoning">
+                                    <strong>AI 推理:</strong> ${activity.reasoning}
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    scheduleHTML += '</div>';
+                    resultDiv.innerHTML = scheduleHTML;
+                } else {
+                    resultDiv.innerHTML = '<div class="error">生成排程失敗</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">錯誤: ${error.message}</div>`;
+            }
+        }
+
+        async function applyScheduleToAgent() {
+            const personaId = document.getElementById('personaSelect').value;
+            if (!personaId) {
+                alert('請先選擇角色');
+                return;
+            }
+
+            const resultDiv = document.getElementById('dailyScheduleResult');
+            
+            const requestData = {
+                persona_id: personaId,
+                date: document.getElementById('scheduleDate').value
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/api/llm-schedule/apply-to-agent`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestData)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    const successDiv = document.createElement('div');
+                    successDiv.className = 'success';
+                    successDiv.innerHTML = `
+                        ✅ ${data.message}<br>
+                        排程 ID: ${data.schedule_id}<br>
+                        活動數量: ${data.task_count}
+                    `;
+                    resultDiv.appendChild(successDiv);
+                } else {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'error';
+                    errorDiv.textContent = '應用排程失敗';
+                    resultDiv.appendChild(errorDiv);
+                }
+            } catch (error) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error';
+                errorDiv.textContent = `錯誤: ${error.message}`;
+                resultDiv.appendChild(errorDiv);
+            }
+        }
+
+        async function startLifeSimulation() {
+            const resultDiv = document.getElementById('controlResult');
+            resultDiv.innerHTML = '<div class="loading">啟動生活模擬中...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/life-simulation/auto-start`);
+                const data = await response.json();
+
+                if (data.success) {
+                    resultDiv.innerHTML = '<div class="success">✅ 生活模擬已啟動</div>';
+                } else {
+                    resultDiv.innerHTML = '<div class="error">啟動失敗</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">錯誤: ${error.message}</div>`;
+            }
+        }
+
+        async function getAgentStatus() {
+            const resultDiv = document.getElementById('controlResult');
+            resultDiv.innerHTML = '<div class="loading">獲取角色狀態中...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/life-simulation/all-agents-status`);
+                const data = await response.json();
+
+                if (data.agents && data.agents.length > 0) {
+                    let statusHTML = '<div class="result-container"><h3>📊 角色狀態</h3>';
+                    
+                    data.agents.forEach(agent => {
+                        statusHTML += `
+                            <div class="activity-card">
+                                <div class="activity-header">
+                                    <div class="activity-name">👤 ${agent.name}</div>
+                                    <div class="activity-time">${agent.current_activity?.name || '無活動'}</div>
+                                </div>
+                                <div class="activity-details">
+                                    <div class="activity-detail">
+                                        <strong>位置:</strong> ${agent.location || '未知'}
+                                    </div>
+                                    <div class="activity-detail">
+                                        <strong>活動類型:</strong> ${agent.current_activity?.type || '無'}
+                                    </div>
+                                    <div class="activity-detail">
+                                        <strong>能量:</strong> ${agent.energy || 0}%
+                                    </div>
+                                    <div class="activity-detail">
+                                        <strong>快樂度:</strong> ${agent.happiness || 0}%
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    statusHTML += '</div>';
+                    resultDiv.innerHTML = statusHTML;
+                } else {
+                    resultDiv.innerHTML = '<div class="error">沒有找到角色</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">錯誤: ${error.message}</div>`;
+            }
+        }
+
+        async function clearAllSchedules() {
+            if (!confirm('確定要清除所有排程嗎？')) return;
+
+            const resultDiv = document.getElementById('controlResult');
+            resultDiv.innerHTML = '<div class="loading">清除排程中...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/schedule/clear-all`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    resultDiv.innerHTML = '<div class="success">✅ 已清除所有排程</div>';
+                } else {
+                    resultDiv.innerHTML = '<div class="error">清除失敗</div>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">錯誤: ${error.message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html>
+
+
