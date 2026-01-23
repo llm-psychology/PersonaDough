@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>角色行程管理系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .status-bar {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-item .icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+        }
+
+        .status-item .icon.active {
+            background: #28a745;
+        }
+
+        .status-item .icon.inactive {
+            background: #dc3545;
+        }
+
+        .control-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .control-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            border: 1px solid #e9ecef;
+        }
+
+        .control-card h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin: 5px;
+            min-width: 120px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn.danger {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+        }
+
+        .btn.danger:hover {
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+        }
+
+        .btn.success {
+            background: linear-gradient(45deg, #51cf66, #40c057);
+        }
+
+        .btn.success:hover {
+            box-shadow: 0 5px 15px rgba(81, 207, 102, 0.4);
+        }
+
+        .btn.warning {
+            background: linear-gradient(45deg, #ffd43b, #fab005);
+        }
+
+        .btn.warning:hover {
+            box-shadow: 0 5px 15px rgba(255, 212, 59, 0.4);
+        }
+
+        .agents-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .agent-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            border: 1px solid #e9ecef;
+            transition: all 0.3s ease;
+        }
+
+        .agent-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .agent-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .agent-name {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .agent-status {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+
+        .agent-status.active {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .agent-status.inactive {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .agent-info {
+            margin-bottom: 15px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+        }
+
+        .info-label {
+            color: #666;
+        }
+
+        .info-value {
+            color: #333;
+            font-weight: 500;
+        }
+
+        .current-task {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+
+        .current-task-label {
+            font-size: 0.8em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .current-task-value {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .agent-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn-small {
+            padding: 8px 16px;
+            font-size: 0.9em;
+            min-width: 80px;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .schedule-templates {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .template-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .template-card:hover {
+            border-color: #667eea;
+            background: #e3f2fd;
+        }
+
+        .template-card.selected {
+            border-color: #667eea;
+            background: #e3f2fd;
+        }
+
+        .template-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .template-desc {
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .refresh-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 1.5em;
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s ease;
+        }
+
+        .refresh-btn:hover {
+            transform: scale(1.1);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            
+            .status-bar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .control-panel {
+                grid-template-columns: 1fr;
+            }
+            
+            .agents-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎭 角色行程管理系統</h1>
+            <p>管理每個角色的日常活動安排</p>
+        </div>
+
+        <div id="messageContainer"></div>
+
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="icon" id="simulationStatus"></div>
+                <span>模擬狀態: <span id="simulationStatusText">檢查中...</span></span>
+            </div>
+            <div class="status-item">
+                <span>總角色數: <span id="totalAgents">-</span></span>
+            </div>
+            <div class="status-item">
+                <span>有行程: <span id="scheduledAgents">-</span></span>
+            </div>
+            <div class="status-item">
+                <span>當前時間: <span id="currentTime">-</span></span>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <div class="control-card">
+                <h3>🚀 一鍵安排行程</h3>
+                <div class="schedule-templates">
+                    <div class="template-card" data-type="student">
+                        <div class="template-name">🎓 學生行程</div>
+                        <div class="template-desc">上學、放學、踢足球</div>
+                    </div>
+                    <div class="template-card" data-type="worker">
+                        <div class="template-name">💼 上班族行程</div>
+                        <div class="template-desc">上班、下班、社交</div>
+                    </div>
+                    <div class="template-card" data-type="balanced">
+                        <div class="template-name">⚖️ 平衡行程</div>
+                        <div class="template-desc">學習、運動、社交</div>
+                    </div>
+                </div>
+                <button class="btn success" onclick="applyScheduleToAll()">套用到所有角色</button>
+            </div>
+
+            <div class="control-card">
+                <h3>⚙️ 系統控制</h3>
+                <button class="btn" onclick="startSimulation()">啟動模擬</button>
+                <button class="btn warning" onclick="stopSimulation()">停止模擬</button>
+                <button class="btn danger" onclick="clearAllSchedules()">清除所有行程</button>
+                <button class="btn" onclick="refreshData()">刷新資料</button>
+            </div>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div>處理中...</div>
+        </div>
+
+        <div class="agents-grid" id="agentsGrid">
+            <!-- 角色卡片將在這裡動態生成 -->
+        </div>
+    </div>
+
+    <button class="refresh-btn" onclick="refreshData()" title="刷新資料">🔄</button>
+
+    <script>
+        const API_BASE = 'http://localhost:20000';
+        let currentScheduleType = 'balanced';
+        let agents = [];
+        let schedules = {};
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            setupEventListeners();
+            updateCurrentTime();
+            setInterval(updateCurrentTime, 1000);
+            refreshData();
+        });
+
+        function setupEventListeners() {
+            // 行程模板選擇
+            document.querySelectorAll('.template-card').forEach(card => {
+                card.addEventListener('click', function() {
+                    document.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
+                    this.classList.add('selected');
+                    currentScheduleType = this.dataset.type;
+                });
+            });
+
+            // 預設選擇平衡行程
+            document.querySelector('.template-card[data-type="balanced"]').classList.add('selected');
+        }
+
+        function updateCurrentTime() {
+            const now = new Date();
+            document.getElementById('currentTime').textContent = now.toLocaleTimeString('zh-TW');
+        }
+
+        async function refreshData() {
+            showLoading(true);
+            try {
+                await Promise.all([
+                    checkSimulationStatus(),
+                    loadAgents(),
+                    loadSchedules()
+                ]);
+                updateStatusBar();
+                renderAgents();
+            } catch (error) {
+                showMessage('刷新資料失敗: ' + error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function checkSimulationStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/api/life-simulation/all-agents-status`);
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('simulationStatus').className = 'icon active';
+                    document.getElementById('simulationStatusText').textContent = '運行中';
+                    return true;
+                } else {
+                    document.getElementById('simulationStatus').className = 'icon inactive';
+                    document.getElementById('simulationStatusText').textContent = '未運行';
+                    return false;
+                }
+            } catch (error) {
+                document.getElementById('simulationStatus').className = 'icon inactive';
+                document.getElementById('simulationStatusText').textContent = '連接失敗';
+                return false;
+            }
+        }
+
+        async function loadAgents() {
+            try {
+                const response = await fetch(`${API_BASE}/api/life-simulation/all-agents-status`);
+                if (response.ok) {
+                    const data = await response.json();
+                    agents = data.agents || [];
+                } else {
+                    throw new Error('無法載入角色資料');
+                }
+            } catch (error) {
+                console.error('載入角色失敗:', error);
+                agents = [];
+            }
+        }
+
+        async function loadSchedules() {
+            try {
+                const response = await fetch(`${API_BASE}/api/schedule/all`);
+                if (response.ok) {
+                    const data = await response.json();
+                    schedules = data.schedules || {};
+                } else {
+                    throw new Error('無法載入行程資料');
+                }
+            } catch (error) {
+                console.error('載入行程失敗:', error);
+                schedules = {};
+            }
+        }
+
+        function updateStatusBar() {
+            document.getElementById('totalAgents').textContent = agents.length;
+            document.getElementById('scheduledAgents').textContent = Object.keys(schedules).length;
+        }
+
+        function renderAgents() {
+            const grid = document.getElementById('agentsGrid');
+            grid.innerHTML = '';
+
+            if (agents.length === 0) {
+                grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: #666;">暫無角色資料</div>';
+                return;
+            }
+
+            agents.forEach(agent => {
+                const schedule = schedules[agent.agent_id];
+                const card = createAgentCard(agent, schedule);
+                grid.appendChild(card);
+            });
+        }
+
+        function createAgentCard(agent, schedule) {
+            const card = document.createElement('div');
+            card.className = 'agent-card';
+
+            const currentActivity = agent.current_activity || {};
+            const currentTask = schedule?.current_task;
+
+            card.innerHTML = `
+                <div class="agent-header">
+                    <div class="agent-name">${agent.name || agent.agent_id}</div>
+                    <div class="agent-status ${schedule?.is_active ? 'active' : 'inactive'}">
+                        ${schedule?.is_active ? '行程啟用' : '無行程'}
+                    </div>
+                </div>
+                
+                <div class="agent-info">
+                    <div class="info-row">
+                        <span class="info-label">位置:</span>
+                        <span class="info-value">${agent.current_location || '未知'}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">健康:</span>
+                        <span class="info-value">${Math.round(agent.health || 0)}%</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">能量:</span>
+                        <span class="info-value">${Math.round(agent.energy || 0)}%</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">快樂:</span>
+                        <span class="info-value">${Math.round(agent.happiness || 0)}%</span>
+                    </div>
+                </div>
+
+                ${currentTask ? `
+                    <div class="current-task">
+                        <div class="current-task-label">當前任務</div>
+                        <div class="current-task-value">${currentTask.name} (${currentTask.start_time})</div>
+                    </div>
+                ` : ''}
+
+                <div class="agent-actions">
+                    ${schedule ? `
+                        <button class="btn btn-small ${schedule.is_active ? 'warning' : 'success'}" 
+                                onclick="toggleSchedule('${agent.agent_id}')">
+                            ${schedule.is_active ? '停用' : '啟用'}
+                        </button>
+                        <button class="btn btn-small danger" onclick="clearAgentSchedule('${agent.agent_id}')">
+                            清除行程
+                        </button>
+                    ` : `
+                        <button class="btn btn-small success" onclick="applyScheduleToAgent('${agent.agent_id}')">
+                            安排行程
+                        </button>
+                    `}
+                </div>
+            `;
+
+            return card;
+        }
+
+        async function applyScheduleToAll() {
+            if (!currentScheduleType) {
+                showMessage('請選擇行程類型', 'error');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                const response = await fetch(`${API_BASE}/api/schedule/apply-to-all?schedule_type=${currentScheduleType}`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showMessage(`成功為 ${data.success_count}/${data.total_agents} 個角色安排 ${currentScheduleType} 行程`, 'success');
+                } else {
+                    showMessage('安排行程失敗: ' + data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('安排行程失敗: ' + error.message, 'error');
+            } finally {
+                showLoading(false);
+                refreshData();
+            }
+        }
+
+        async function applyScheduleToAgent(agentId) {
+            showLoading(true);
+            try {
+                const response = await fetch(`${API_BASE}/api/schedule/apply-to-agent/${agentId}?schedule_type=${currentScheduleType}`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showMessage(`成功為角色安排 ${currentScheduleType} 行程`, 'success');
+                } else {
+                    showMessage('安排行程失敗: ' + data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('安排行程失敗: ' + error.message, 'error');
+            } finally {
+                showLoading(false);
+                refreshData();
+            }
+        }
+
+        async function toggleSchedule(agentId) {
+            showLoading(true);
+            try {
+                const response = await fetch(`${API_BASE}/api/schedule/toggle/${agentId}`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showMessage(`角色行程已${data.message}`, 'success');
+                } else {
+                    showMessage('切換行程狀態失敗: ' + data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('切換行程狀態失敗: ' + error.message, 'error');
+            } finally {
+                showLoading(false);
+                refreshData();
+            }
+        }
+
+        async function clearAgentSchedule(agentId) {
+            if (!confirm('確定要清除這個角色的行程安排嗎？')) {
+                return;
+            }
+
+            showLoading(true);
+            try {
+                const response = await fetch(`${API_BASE}/api/schedule/agent/${agentId}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('已清除角色行程', 'success');
+                } else {
+                    showMessage('清除行程失敗: ' + data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('清除行程失敗: ' + error.message, 'error');
+            } finally {
+                showLoading(false);
+                refreshData();
+            }
+        }
+
+        async function clearAllSchedules() {
+            if (!confirm('確定要清除所有角色的行程安排嗎？')) {
+                return;
+            }
+
+            showLoading(true);
+            try {
+                const response = await fetch(`${API_BASE}/api/schedule/clear-all`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('已清除所有行程安排', 'success');
+                } else {
+                    showMessage('清除行程失敗: ' + data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('清除行程失敗: ' + error.message, 'error');
+            } finally {
+                showLoading(false);
+                refreshData();
+            }
+        }
+
+        async function startSimulation() {
+            showLoading(true);
+            try {
+                const response = await fetch(`${API_BASE}/api/life-simulation/auto-start`);
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('生活模擬已啟動', 'success');
+                } else {
+                    showMessage('啟動模擬失敗: ' + data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('啟動模擬失敗: ' + error.message, 'error');
+            } finally {
+                showLoading(false);
+                refreshData();
+            }
+        }
+
+        async function stopSimulation() {
+            if (!confirm('確定要停止生活模擬嗎？')) {
+                return;
+            }
+
+            showLoading(true);
+            try {
+                const response = await fetch(`${API_BASE}/api/life-simulation/stop`, {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('生活模擬已停止', 'success');
+                } else {
+                    showMessage('停止模擬失敗: ' + data.message, 'error');
+                }
+            } catch (error) {
+                showMessage('停止模擬失敗: ' + error.message, 'error');
+            } finally {
+                showLoading(false);
+                refreshData();
+            }
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').classList.toggle('show', show);
+        }
+
+        function showMessage(message, type = 'info') {
+            const container = document.getElementById('messageContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = message;
+            
+            container.innerHTML = '';
+            container.appendChild(messageDiv);
+            
+            // 3秒後自動隱藏
+            setTimeout(() => {
+                messageDiv.remove();
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
+
+

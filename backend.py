@@ -97,10 +97,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-'''
+
 # Mount static files for output_internet directory
 app.mount("/unity", StaticFiles(directory="output_internet", html=True), name="unity")
-'''
+
 # =======================================================
 # frontend
 @app.get("/")
@@ -2546,13 +2546,157 @@ async def run_fire_simulation_background(simulation_id: str, simulator: FireScen
         escaped_count = sum(1 for a in simulator.agents if a.escaped)
         injured_count = sum(1 for a in simulator.agents if a.injured)
         
+        # 計算總撤離時間（最後一位倖存者離開的Tick）
+        last_escape_tick = 0
+        for agent in simulator.agents:
+            if agent.escaped and hasattr(agent, 'log'):
+                for log_entry in agent.log:
+                    if log_entry.get('action') == '逃生成功':
+                        last_escape_tick = max(last_escape_tick, log_entry.get('tick', 0))
+        
+        # 收集所有代理人的詳細數據用於報表分析
+        detailed_agents_data = []
+        all_messages = []
+        panic_history = {}  # {agent_id: [(tick, panic_level)]}
+        
+        for agent in simulator.agents:
+            # 收集對話記錄
+            agent_messages = []
+            if hasattr(agent, 'messages_received'):
+                for msg in agent.messages_received:
+                    all_messages.append({
+                        'tick': msg.get('tick', 0),
+                        'from': msg.get('from', 'unknown'),
+                        'to': agent.id,
+                        'message': msg.get('message', '')
+                    })
+                    agent_messages.append(msg.get('message', ''))
+            
+            # 收集恐慌歷史
+            panic_history[agent.id] = []
+            if hasattr(agent, 'log'):
+                for log_entry in agent.log:
+                    tick = log_entry.get('tick', 0)
+                    # 從日誌中提取恐慌值（如果有的話）
+                    panic_history[agent.id].append((tick, getattr(agent, 'panic_level', 0)))
+            
+            # 分析行為模式
+            action_log = getattr(agent, 'log', [])
+            shout_count = sum(1 for log in action_log if log.get('action') == '呼救')
+            move_count = sum(1 for log in action_log if log.get('action') in ['移動', '逃生成功', '返回救援'])
+            help_count = sum(1 for log in action_log if log.get('action') == '幫助他人')
+            
+            # 計算反應時間（從感知火災到第一次行動的Tick）
+            reaction_time = None
+            first_fire_tick = None
+            first_action_tick = None
+            for log_entry in action_log:
+                if '火' in str(log_entry.get('details', '')) or '煙' in str(log_entry.get('details', '')):
+                    if first_fire_tick is None:
+                        first_fire_tick = log_entry.get('tick', 0)
+                if log_entry.get('action') in ['移動', '呼救', '幫助他人']:
+                    if first_action_tick is None:
+                        first_action_tick = log_entry.get('tick', 0)
+            if first_fire_tick is not None and first_action_tick is not None:
+                reaction_time = first_action_tick - first_fire_tick
+            
+            # 判斷是否選擇原路折返（檢查日誌中是否有返回之前位置的記錄）
+            backtracked = False
+            visited_rooms = []
+            for log_entry in action_log:
+                if log_entry.get('action') in ['移動', '返回救援']:
+                    details = str(log_entry.get('details', ''))
+                    if '從' in details and '到' in details:
+                        parts = details.split('到')
+                        if len(parts) > 1:
+                            target = parts[1].split(',')[0].strip()
+                            if target in visited_rooms:
+                                backtracked = True
+                            visited_rooms.append(target)
+            
+            # 判斷是否跟隨他人（檢查是否在收到訊息後立即移動）
+            followed_others = False
+            for i, log_entry in enumerate(action_log):
+                if log_entry.get('action') == '移動':
+                    # 檢查前一個Tick是否有收到訊息
+                    if i > 0:
+                        prev_tick = action_log[i-1].get('tick', 0)
+                        current_tick = log_entry.get('tick', 0)
+                        if current_tick == prev_tick + 1 and agent.messages_received:
+                            followed_others = True
+                            break
+            
+            detailed_agents_data.append({
+                'id': agent.id,
+                'name': agent.name,
+                'traits': getattr(agent, 'traits', []),
+                'social_abilities': getattr(agent, 'social_abilities', []),
+                'ability_attributes': getattr(agent, 'ability_attributes', []),
+                'escaped': agent.escaped,
+                'injured': agent.injured,
+                'final_health': agent.health,
+                'final_panic': getattr(agent, 'panic_level', 0),
+                'final_location': agent.location,
+                'action_log': action_log,
+                'messages_sent': shout_count,
+                'messages_received': len(agent_messages),
+                'move_count': move_count,
+                'help_count': help_count,
+                'reaction_time': reaction_time,
+                'backtracked': backtracked,
+                'followed_others': followed_others,
+                'death_cause': '被火燒死' if agent.injured and agent.health <= 0 else ('吸入濃煙致死' if agent.injured else None)
+            })
+        
+        # 計算擁塞事件（多人在同一小區域停滯）
+        congestion_events = 0
+        room_occupancy_by_tick = {}
+        
+        # 追蹤每個tick時每個房間的代理人數量
+        for agent in simulator.agents:
+            if hasattr(agent, 'log'):
+                for log_entry in agent.log:
+                    tick = log_entry.get('tick', 0)
+                    if tick not in room_occupancy_by_tick:
+                        room_occupancy_by_tick[tick] = {}
+                    
+                    # 從日誌中提取房間信息
+                    action = log_entry.get('action', '')
+                    details = str(log_entry.get('details', ''))
+                    if action in ['移動', '逃生成功', '返回救援'] and '到' in details:
+                        # 提取目標房間
+                        parts = details.split('到')
+                        if len(parts) > 1:
+                            target_room = parts[1].split(',')[0].strip()
+                            if target_room not in room_occupancy_by_tick[tick]:
+                                room_occupancy_by_tick[tick][target_room] = 0
+                            room_occupancy_by_tick[tick][target_room] += 1
+                    else:
+                        # 使用當前位置
+                        current_room = agent.location
+                        if current_room not in room_occupancy_by_tick[tick]:
+                            room_occupancy_by_tick[tick][current_room] = 0
+                        room_occupancy_by_tick[tick][current_room] += 1
+        
+        # 統計擁塞事件（3人或以上在同一房間）
+        for tick, rooms in room_occupancy_by_tick.items():
+            for room, count in rooms.items():
+                if count >= 3:  # 3人或以上在同一房間視為擁塞
+                    congestion_events += 1
+        
         sim_data["final_stats"] = {
             "total_agents": total_agents,
             "escaped_count": escaped_count,
             "injured_count": injured_count,
             "escape_rate": escaped_count / total_agents if total_agents > 0 else 0,
             "injury_rate": injured_count / total_agents if total_agents > 0 else 0,
-            "total_ticks": simulator.tick
+            "total_ticks": simulator.tick,
+            "total_evacuation_time": last_escape_tick,
+            "congestion_events": congestion_events,
+            "detailed_agents": detailed_agents_data,
+            "all_messages": all_messages,
+            "panic_history": panic_history,
+            "simulation_log": getattr(simulator, 'simulation_log', [])
         }
         
         logger.info(f"火災模擬 {simulation_id} 完成")

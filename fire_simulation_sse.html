@@ -610,6 +610,199 @@
         .refresh-btn:hover {
             background: #bdc3c7;
         }
+
+        /* 報表模態框樣式 */
+        .report-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7);
+            overflow: auto;
+        }
+
+        .report-modal-content {
+            background-color: #fefefe;
+            margin: 2% auto;
+            padding: 0;
+            border: 1px solid #888;
+            width: 95%;
+            max-width: 1400px;
+            max-height: 90vh;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .report-modal-header {
+            padding: 20px;
+            background: #2c3e50;
+            color: white;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .report-modal-header h2 {
+            margin: 0;
+        }
+
+        .report-close-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+        }
+
+        .report-close-btn:hover {
+            opacity: 0.7;
+        }
+
+        .report-modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .report-modal-footer {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #ddd;
+            border-radius: 0 0 8px 8px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        /* 報表區塊樣式 */
+        .report-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .report-section h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .report-table th,
+        .report-table td {
+            padding: 10px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+
+        .report-table th {
+            background: #3498db;
+            color: white;
+            font-weight: bold;
+        }
+
+        .report-table tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+
+        .report-table tr:hover {
+            background: #e8f4f8;
+        }
+
+        .report-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .report-card {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border-left: 4px solid #3498db;
+        }
+
+        .report-card-label {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-bottom: 5px;
+        }
+
+        .report-card-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .report-chart-container {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            height: 300px;
+        }
+
+        .report-agent-trace {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 10px;
+            border-left: 4px solid #27ae60;
+        }
+
+        .report-trace-entry {
+            margin-bottom: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 4px;
+        }
+
+        .report-trace-tick {
+            font-weight: bold;
+            color: #3498db;
+        }
+
+        .report-word-cloud {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 15px;
+        }
+
+        .word-cloud-item {
+            padding: 5px 10px;
+            background: #e8f4f8;
+            border-radius: 15px;
+            font-size: 14px;
+        }
+
+        .word-cloud-item.large {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .word-cloud-item.medium {
+            font-size: 16px;
+        }
     </style>
 </head>
 <body>
@@ -716,9 +909,30 @@
     </div>
 
     <div class="logs-panel">
-        <h2>事件日誌</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <h2 style="margin: 0;">事件日誌</h2>
+            <button class="btn btn-primary" id="showReportBtn" onclick="showAnalysisReport()" style="display: none; padding: 5px 15px; font-size: 12px;">📊 查看分析報表</button>
+        </div>
         <div id="eventLogs">
             <!-- 事件日誌將通過JavaScript動態生成 -->
+        </div>
+    </div>
+
+    <!-- 分析報表模態框 -->
+    <div id="reportModal" class="report-modal" style="display: none;">
+        <div class="report-modal-content">
+            <div class="report-modal-header">
+                <h2>📊 模擬分析報表</h2>
+                <button class="report-close-btn" onclick="closeReportModal()">&times;</button>
+            </div>
+            <div class="report-modal-body" id="reportContent">
+                <!-- 報表內容將通過JavaScript動態生成 -->
+            </div>
+            <div class="report-modal-footer">
+                <button class="btn btn-primary" onclick="exportReportToCSV()">📥 導出CSV</button>
+                <button class="btn btn-success" onclick="exportReportToJSON()">📥 導出JSON</button>
+                <button class="btn btn-warning" onclick="closeReportModal()">關閉</button>
+            </div>
         </div>
     </div>
 
@@ -735,6 +949,9 @@
         let agentSelectionMode = 'random'; // 'random' 或 'custom'
         let availableAgents = [];
         let selectedAgents = {}; // { persona_id: { name, room } }
+
+        // 報表數據
+        let reportData = null;
 
         // 房間選項（用於代理人初始位置）
         const ROOM_OPTIONS = [
@@ -1201,6 +1418,8 @@
                 updateControlButtons();
                 if (data.stats) {
                     showFinalStats(data.stats);
+                    reportData = data.stats;
+                    document.getElementById('showReportBtn').style.display = 'block';
                 }
             }
         }
@@ -1427,6 +1646,416 @@
                 eventSource.close();
             }
         });
+
+        // =======================================================
+        // 報表生成功能
+        // =======================================================
+
+        // 顯示分析報表
+        function showAnalysisReport() {
+            if (!reportData) {
+                alert('沒有可用的報表數據');
+                return;
+            }
+            
+            const modal = document.getElementById('reportModal');
+            const content = document.getElementById('reportContent');
+            
+            // 生成報表內容
+            content.innerHTML = generateReportHTML(reportData);
+            
+            modal.style.display = 'block';
+        }
+
+        // 關閉報表模態框
+        function closeReportModal() {
+            document.getElementById('reportModal').style.display = 'none';
+        }
+
+        // 生成報表HTML
+        function generateReportHTML(stats) {
+            if (!stats || !stats.detailed_agents) {
+                return '<p>報表數據不完整</p>';
+            }
+
+            const agents = stats.detailed_agents || [];
+            const messages = stats.all_messages || [];
+            const panicHistory = stats.panic_history || {};
+
+            // 1. 總體績效概覽
+            const globalPerformanceHTML = generateGlobalPerformance(stats, agents);
+
+            // 2. 人格與行為關聯表
+            const personalityBehaviorHTML = generatePersonalityBehaviorTable(agents);
+
+            // 3. 資訊傳遞熱度圖
+            const informationDynamicsHTML = generateInformationDynamics(messages, agents);
+
+            // 4. 個體深度追蹤
+            const individualTraceHTML = generateIndividualTrace(agents);
+
+            // 5. 系統技術指標
+            const technicalMetricsHTML = generateTechnicalMetrics(stats);
+
+            return `
+                ${globalPerformanceHTML}
+                ${personalityBehaviorHTML}
+                ${informationDynamicsHTML}
+                ${individualTraceHTML}
+                ${technicalMetricsHTML}
+            `;
+        }
+
+        // 1. 總體績效概覽
+        function generateGlobalPerformance(stats, agents) {
+            const totalEvacuationTime = stats.total_evacuation_time || stats.total_ticks || 0;
+            const survivalRate = stats.escape_rate || 0;
+            const congestionEvents = stats.congestion_events || 0;
+            
+            // 傷亡分析
+            const casualties = agents.filter(a => a.injured || (!a.escaped && a.final_health <= 0));
+            const casualtiesList = casualties.map(a => ({
+                name: a.name,
+                cause: a.death_cause || '未知原因',
+                final_health: a.final_health
+            }));
+
+            return `
+                <div class="report-section">
+                    <h3>1. 總體績效概覽 (Global Performance)</h3>
+                    <div class="report-grid">
+                        <div class="report-card">
+                            <div class="report-card-label">總撤離時間</div>
+                            <div class="report-card-value">${totalEvacuationTime} Ticks</div>
+                        </div>
+                        <div class="report-card">
+                            <div class="report-card-label">群體存活率</div>
+                            <div class="report-card-value">${(survivalRate * 100).toFixed(1)}%</div>
+                        </div>
+                        <div class="report-card">
+                            <div class="report-card-label">擁塞事件總數</div>
+                            <div class="report-card-value">${congestionEvents}</div>
+                        </div>
+                        <div class="report-card">
+                            <div class="report-card-label">成功逃生</div>
+                            <div class="report-card-value">${stats.escaped_count || 0} / ${stats.total_agents || 0}</div>
+                        </div>
+                    </div>
+                    
+                    <h4 style="margin-top: 20px;">傷亡分析</h4>
+                    <table class="report-table">
+                        <thead>
+                            <tr>
+                                <th>姓名</th>
+                                <th>死因</th>
+                                <th>最終健康值</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${casualtiesList.length > 0 ? casualtiesList.map(c => `
+                                <tr>
+                                    <td>${c.name}</td>
+                                    <td>${c.cause}</td>
+                                    <td>${c.final_health}%</td>
+                                </tr>
+                            `).join('') : '<tr><td colspan="3">無傷亡</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        // 2. 人格與行為關聯表
+        function generatePersonalityBehaviorTable(agents) {
+            // 分類E組（外向）和N組（神經質）
+            const eGroup = agents.filter(a => {
+                const traits = (a.traits || []).join(' ');
+                return traits.includes('外向') || traits.includes('開朗') || traits.includes('活潑');
+            });
+            
+            const nGroup = agents.filter(a => {
+                const traits = (a.traits || []).join(' ');
+                return traits.includes('神經質') || traits.includes('焦慮') || traits.includes('緊張');
+            });
+
+            // 計算平均值
+            const calcAvg = (group, field) => {
+                if (group.length === 0) return 0;
+                const sum = group.reduce((acc, a) => acc + (a[field] || 0), 0);
+                return (sum / group.length).toFixed(1);
+            };
+
+            const calcRatio = (group, field) => {
+                if (group.length === 0) return 0;
+                const count = group.filter(a => a[field]).length;
+                return ((count / group.length) * 100).toFixed(1);
+            };
+
+            const eAvgReactionTime = calcAvg(eGroup, 'reaction_time');
+            const nAvgReactionTime = calcAvg(nGroup, 'reaction_time');
+            
+            const eAvgMessages = calcAvg(eGroup, 'messages_sent');
+            const nAvgMessages = calcAvg(nGroup, 'messages_sent');
+
+            // 計算負面/恐慌發言比率（簡化：根據發言內容判斷）
+            const ePanicRatio = calcRatio(eGroup, 'final_panic');
+            const nPanicRatio = calcRatio(nGroup, 'final_panic');
+
+            const eBacktrackRatio = calcRatio(eGroup, 'backtracked');
+            const nBacktrackRatio = calcRatio(nGroup, 'backtracked');
+
+            const eFollowRatio = calcRatio(eGroup, 'followed_others');
+            const nFollowRatio = calcRatio(nGroup, 'followed_others');
+
+            return `
+                <div class="report-section">
+                    <h3>2. 人格與行為關聯表 (Personality vs. Behavior Analysis)</h3>
+                    <p style="color: #7f8c8d; font-size: 12px; margin-bottom: 15px;">
+                        E組（外向）: ${eGroup.length}人 | N組（神經質）: ${nGroup.length}人
+                    </p>
+                    <table class="report-table">
+                        <thead>
+                            <tr>
+                                <th>指標</th>
+                                <th>E組（外向）平均值</th>
+                                <th>N組（神經質）平均值</th>
+                                <th>假說驗證</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>平均反應時間</td>
+                                <td>${eAvgReactionTime || 'N/A'} Ticks</td>
+                                <td>${nAvgReactionTime || 'N/A'} Ticks</td>
+                                <td>T1: 外向者決策較快？</td>
+                            </tr>
+                            <tr>
+                                <td>平均發言頻率</td>
+                                <td>${eAvgMessages} 次</td>
+                                <td>${nAvgMessages} 次</td>
+                                <td>T1: 外向者較多話？</td>
+                            </tr>
+                            <tr>
+                                <td>最終恐慌值比率</td>
+                                <td>${ePanicRatio}%</td>
+                                <td>${nPanicRatio}%</td>
+                                <td>T1: 神經質散播恐慌？</td>
+                            </tr>
+                            <tr>
+                                <td>選擇「原路折返」比例</td>
+                                <td>${eBacktrackRatio}%</td>
+                                <td>${nBacktrackRatio}%</td>
+                                <td>T2: 神經質偏好熟路？</td>
+                            </tr>
+                            <tr>
+                                <td>跟隨他人(從眾)比例</td>
+                                <td>${eFollowRatio}%</td>
+                                <td>${nFollowRatio}%</td>
+                                <td>T2: 外向者易受影響？</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        // 3. 資訊傳遞熱度圖
+        function generateInformationDynamics(messages, agents) {
+            // 關鍵詞雲
+            const wordCount = {};
+            messages.forEach(msg => {
+                const text = msg.message || '';
+                const words = text.match(/[\u4e00-\u9fa5]+/g) || [];
+                words.forEach(word => {
+                    if (word.length >= 2) {
+                        wordCount[word] = (wordCount[word] || 0) + 1;
+                    }
+                });
+            });
+
+            const sortedWords = Object.entries(wordCount)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 20);
+
+            const wordCloudHTML = sortedWords.length > 0 ? sortedWords.map(([word, count]) => {
+                let sizeClass = 'small';
+                if (count >= 5) sizeClass = 'large';
+                else if (count >= 3) sizeClass = 'medium';
+                return `<span class="word-cloud-item ${sizeClass}">${word} (${count})</span>`;
+            }).join('') : '<p>無對話記錄</p>';
+
+            // 情緒曲線圖（簡化版：顯示平均恐慌值）
+            const panicData = [];
+            const maxTick = Math.max(...agents.map(a => {
+                const logs = a.action_log || [];
+                return Math.max(...logs.map(l => l.tick || 0), 0);
+            }), 0);
+
+            for (let tick = 0; tick <= maxTick; tick++) {
+                let totalPanic = 0;
+                let count = 0;
+                agents.forEach(agent => {
+                    // 簡化：使用最終恐慌值
+                    totalPanic += agent.final_panic || 0;
+                    count++;
+                });
+                panicData.push({
+                    tick: tick,
+                    avgPanic: count > 0 ? (totalPanic / count).toFixed(1) : 0
+                });
+            }
+
+            const panicChartHTML = `
+                <div class="report-chart-container">
+                    <h4>平均恐慌值隨時間變化</h4>
+                    <div style="display: flex; align-items: flex-end; height: 200px; gap: 5px;">
+                        ${panicData.map(d => `
+                            <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
+                                <div style="width: 100%; background: #e74c3c; height: ${d.avgPanic * 2}px; border-radius: 2px 2px 0 0;"></div>
+                                <span style="font-size: 10px; margin-top: 5px;">${d.tick}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+
+            return `
+                <div class="report-section">
+                    <h3>3. 資訊傳遞熱度圖 (Information Dynamics)</h3>
+                    
+                    <h4>關鍵詞雲</h4>
+                    <div class="report-word-cloud">
+                        ${wordCloudHTML}
+                    </div>
+
+                    ${panicChartHTML}
+                </div>
+            `;
+        }
+
+        // 4. 個體深度追蹤
+        function generateIndividualTrace(agents) {
+            // 選擇最具代表性的代理人（死得最快的、成功逃生的）
+            const casualties = agents.filter(a => a.injured || (!a.escaped && a.final_health <= 0));
+            const survivors = agents.filter(a => a.escaped);
+
+            const representativeAgents = [];
+            
+            // 最快死亡的代理人
+            if (casualties.length > 0) {
+                const fastestDeath = casualties.reduce((min, a) => {
+                    const minTick = Math.min(...(a.action_log || []).map(l => l.tick || 999));
+                    const currentMinTick = Math.min(...(min.action_log || []).map(l => l.tick || 999));
+                    return minTick < currentMinTick ? a : min;
+                }, casualties[0]);
+                representativeAgents.push({...fastestDeath, label: '最快死亡'});
+            }
+
+            // 成功逃生的代理人
+            if (survivors.length > 0) {
+                representativeAgents.push({...survivors[0], label: '成功逃生'});
+            }
+
+            const traceHTML = representativeAgents.map(agent => {
+                const keyDecisions = (agent.action_log || [])
+                    .filter(log => ['移動', '呼救', '逃生成功', '幫助他人'].includes(log.action))
+                    .slice(0, 5);
+
+                return `
+                    <div class="report-agent-trace">
+                        <h4>${agent.name} (${agent.label})</h4>
+                        ${keyDecisions.map(log => `
+                            <div class="report-trace-entry">
+                                <span class="report-trace-tick">Tick ${log.tick}:</span>
+                                <strong>${log.action}</strong> - ${log.details || ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="report-section">
+                    <h3>4. 個體深度追蹤 (Individual Trace)</h3>
+                    ${traceHTML || '<p>無代表性代理人數據</p>'}
+                </div>
+            `;
+        }
+
+        // 5. 系統技術指標
+        function generateTechnicalMetrics(stats) {
+            const startTime = performance.now(); // 簡化：使用當前時間
+            const totalTicks = stats.total_ticks || 0;
+            const avgTPS = totalTicks > 0 ? (totalTicks / (Date.now() / 1000)).toFixed(2) : 'N/A';
+
+            return `
+                <div class="report-section">
+                    <h3>5. 系統技術指標 (Technical Metrics)</h3>
+                    <div class="report-grid">
+                        <div class="report-card">
+                            <div class="report-card-label">總運行時間</div>
+                            <div class="report-card-value">${(Date.now() / 1000).toFixed(1)}秒</div>
+                        </div>
+                        <div class="report-card">
+                            <div class="report-card-label">總Tick數</div>
+                            <div class="report-card-value">${totalTicks}</div>
+                        </div>
+                        <div class="report-card">
+                            <div class="report-card-label">平均TPS</div>
+                            <div class="report-card-value">${avgTPS}</div>
+                        </div>
+                        <div class="report-card">
+                            <div class="report-card-label">總代理人數</div>
+                            <div class="report-card-value">${stats.total_agents || 0}</div>
+                        </div>
+                    </div>
+                    <p style="margin-top: 15px; color: #7f8c8d; font-size: 12px;">
+                        註：LLM Token消耗量與JSON解析失敗次數需在後端記錄
+                    </p>
+                </div>
+            `;
+        }
+
+        // 導出CSV
+        function exportReportToCSV() {
+            if (!reportData) return;
+            
+            const agents = reportData.detailed_agents || [];
+            let csv = '姓名,人格特質,社交能力,能力屬性,是否逃生,是否受傷,最終健康值,最終恐慌值,反應時間,發言次數,移動次數,幫助次數,是否折返,是否跟隨\n';
+            
+            agents.forEach(agent => {
+                const traits = (agent.traits || []).join(';');
+                const social = (agent.social_abilities || []).join(';');
+                const ability = (agent.ability_attributes || []).join(';');
+                csv += `${agent.name},${traits},${social},${ability},${agent.escaped},${agent.injured},${agent.final_health},${agent.final_panic},${agent.reaction_time || 'N/A'},${agent.messages_sent},${agent.move_count},${agent.help_count},${agent.backtracked},${agent.followed_others}\n`;
+            });
+
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `fire_simulation_report_${simulationId || 'unknown'}.csv`;
+            link.click();
+        }
+
+        // 導出JSON
+        function exportReportToJSON() {
+            if (!reportData) return;
+            
+            const json = JSON.stringify(reportData, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `fire_simulation_report_${simulationId || 'unknown'}.json`;
+            link.click();
+        }
+
+        // 點擊模態框外部關閉
+        window.onclick = function(event) {
+            const modal = document.getElementById('reportModal');
+            if (event.target == modal) {
+                closeReportModal();
+            }
+        }
     </script>
 </body>
 </html> 

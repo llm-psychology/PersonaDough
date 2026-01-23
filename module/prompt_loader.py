@@ -230,6 +230,14 @@ top_p// 從 0.1 到 1.0 的值，根據內容的多樣性需求決定
 能力屬性: {ability_attributes}
 記憶資料: {retrieved_docs}
 
+【安全決策準則（高優先級）】
+當環境風險為 critical，或下列任一條件成立時：
+- 房間著火或溫度 > 150°C
+- 能見度 < 20%
+- 恐慌程度 >= 80
+- 健康 <= 20
+請優先選擇 move 朝安全方向（走廊→大門）。僅在同時滿足「健康 > 60、能見度 > 50、同伴就在身邊、路線安全可行」時，才選擇 help_others。若看不清或路線不明，先 search 或 shout。
+
 請根據當前情境做出最符合你人格的決策。你的回應必須是以下JSON格式：
 {{
     "action": "move|stay|shout|help_others|search|panic",
@@ -256,6 +264,10 @@ top_p// 從 0.1 到 1.0 的值，根據內容的多樣性需求決定
 你的健康狀況: {health}/100
 是否知道火災: {known_fire}
 最近收到的訊息: {recent_messages}
+
+環境風險: {risk_level}
+房間溫度: {room_temperature}°C, 能見度: {visibility}%
+房間狀態: 著火={on_fire}, 煙霧={smoke}
 """
             },
             
@@ -279,12 +291,13 @@ top_p// 從 0.1 到 1.0 的值，根據內容的多樣性需求決定
             }
         }
     
-    def get_prompt(self, prompt_key: str, **kwargs) -> Dict[str, str]:
+    def get_prompt(self, prompt_key: str, template_keys: Optional[List[str]] = None, **kwargs) -> Dict[str, str]:
         """
         獲取指定的提示詞模板並填入參數
         
         Args:
             prompt_key: 提示詞的鍵值
+            template_keys: 要格式化的模板鍵列表，如果為None則格式化所有模板
             **kwargs: 要填入模板的參數
             
         Returns:
@@ -296,8 +309,11 @@ top_p// 從 0.1 到 1.0 的值，根據內容的多樣性需求決定
         prompt_template = self.prompts[prompt_key]
         result = {}
         
+        # 如果指定了 template_keys，只處理這些鍵；否則處理所有鍵
+        keys_to_process = set(template_keys) if template_keys else set(prompt_template.keys())
+        
         for key, template in prompt_template.items():
-            if isinstance(template, str) and "{" in template:
+            if key in keys_to_process and isinstance(template, str) and "{" in template:
                 try:
                     result[key] = template.format(**kwargs)
                 except KeyError as e:
@@ -310,7 +326,9 @@ top_p// 從 0.1 到 1.0 的值，根據內容的多樣性需求決定
     
     def get_system_prompt(self, prompt_key: str, **kwargs) -> str:
         """獲取系統提示詞"""
-        prompt = self.get_prompt(prompt_key, **kwargs)
+        # 只格式化 system_template 或 system，避免格式化 user_template 時缺少參數
+        template_keys = ["system", "system_template"]
+        prompt = self.get_prompt(prompt_key, template_keys=template_keys, **kwargs)
         if "system" in prompt:
             return prompt["system"]
         elif "system_template" in prompt:
@@ -320,7 +338,9 @@ top_p// 從 0.1 到 1.0 的值，根據內容的多樣性需求決定
     
     def get_user_prompt(self, prompt_key: str, **kwargs) -> str:
         """獲取用戶提示詞"""
-        prompt = self.get_prompt(prompt_key, **kwargs)
+        # 只格式化 user_template、user 或 template，避免格式化 system_template 時缺少參數
+        template_keys = ["user", "user_template", "template"]
+        prompt = self.get_prompt(prompt_key, template_keys=template_keys, **kwargs)
         if "user" in prompt:
             return prompt["user"]
         elif "user_template" in prompt:

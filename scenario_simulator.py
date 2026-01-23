@@ -473,6 +473,23 @@ class FireScenarioSimulator:
         if action == "move" and target in self.connections[agent.location]:
             # 移動
             old_location = agent.location
+            
+            # 防止無限循環：如果已逃生的人要返回，先檢查是否真的有人需要救援
+            if agent.escaped and agent.allow_reentry and target != '大門':
+                # 檢查建築內是否還有未逃生的人
+                agents_inside = [a for a in self.agents if not a.escaped and not a.injured]
+                if len(agents_inside) == 0:
+                    # 沒有人需要救援，阻止返回
+                    agent.current_action = "所有人已逃生，留在安全區域"
+                    agent.add_log(self.tick, "等待", "所有人已逃生，無需返回")
+                    return
+                
+                # 限制返回次數，避免無限循環
+                if agent.reentered_times >= 2:
+                    agent.current_action = "已返回多次，留在安全區域"
+                    agent.add_log(self.tick, "等待", "已返回多次，不再返回")
+                    return
+            
             self.rooms[old_location].agents.remove(agent.id)
             agent.location = target
             self.rooms[target].agents.append(agent.id)
@@ -647,10 +664,33 @@ class FireScenarioSimulator:
             room.update_environment(self.tick)
             
         # 4. 代理人感知與決策
+        # 先統計建築內未逃生的人數（用於防止無限循環）
+        agents_inside_building = [a for a in self.agents if not a.escaped and not a.injured]
+        agents_escaped = [a for a in self.agents if a.escaped]
+        
         for agent in self.agents:
-            # 受傷者不再行動；已逃生者允許在 allow_reentry==True 的前提下繼續決策（可返回救援）
+            # 受傷者不再行動
             if agent.injured:
                 continue
+            
+            # 已逃生者的特殊處理：防止無限循環
+            if agent.escaped:
+                # 如果建築內已經沒有人需要救援，已逃生者不應該再返回
+                if len(agents_inside_building) == 0:
+                    # 所有人都已逃生，已逃生者保持在外，不再決策
+                    continue
+                
+                # 限制返回次數，避免無限循環
+                if agent.reentered_times >= 2:
+                    # 已經返回過2次，不再返回
+                    continue
+                
+                # 檢查是否真的有人需要救援（不在出口的人）
+                agents_needing_rescue = [a for a in agents_inside_building 
+                                       if a.location != '大門' and not a.escaped]
+                if len(agents_needing_rescue) == 0:
+                    # 所有未逃生的人都在出口附近，不需要救援
+                    continue
                 
             current_room = self.rooms[agent.location]
             
@@ -669,6 +709,18 @@ class FireScenarioSimulator:
                 situation += "房間有煙霧。"
             else:
                 situation += "房間目前安全。"
+            
+            # 對於已逃生的代理人，明確告知建築內的情況
+            if agent.escaped:
+                situation += f" 你已經逃到安全區域。建築內還有 {len(agents_inside_building)} 人未逃生。"
+                if len(agents_inside_building) > 0:
+                    inside_names = [a.name for a in agents_inside_building[:3]]  # 只顯示前3個名字
+                    situation += f" 包括: {', '.join(inside_names)}"
+                    if len(agents_inside_building) > 3:
+                        situation += f" 等共{len(agents_inside_building)}人"
+            else:
+                # 未逃生的代理人，告知還有多少人未逃生
+                situation += f" 建築內還有 {len(agents_inside_building)} 人未逃生。"
                 
             if agent.messages_received:
                 situation += f" 剛收到訊息: {agent.messages_received[-1]['message']}"
