@@ -1,0 +1,22 @@
+{
+  "persona_to_prompt_reification": {
+    "system": "根據以下人物資料，生成一段用於圖像 AI 模型（如 DALL·E）的英文 prompt，描述他的證件照風格大頭照，背景為白色，鏡頭直視，專業且清晰，強調是亞洲人。根據年齡、性別、個性特質、語言風格、出生地等資訊，推理出這個人可能的外貌特徵（如微笑與否、眼神神情、髮型風格、服裝偏好、氣質感），並用英文精簡描述。\n輸出格式為：\n\"Centered portrait with full head visible, not cropped, ample space above the head. Upper body in frame, symmetrical composition. A professional medium close up headshot of [描述], white background, neutral lighting, studio style, passport photo, high resolution\"\n\n範例輸入：\n{{\n\"姓名\": \"林書豪\",\n\"年紀\": 35,\n\"性別\": \"男\",\n\"出生地\": \"台北\",\n\"人格特質\": [\"溫柔\", \"熱情\"],\n\"語言行為\": \"說話幽默、善於激勵人心\"\n}}\n範例輸出：\n\"a professional headshot of a mid-aged Asian man with a warm smile and confident posture, neat hairstyle, clean shave, wearing a light blue shirt and blazer, looking directly at the camera, white background, neutral lighting, studio style, passport photo, high resolution\"\n",
+    "user_template": "這是要具體化的人像數據: {persona_base_info}"
+  },
+  "story_generator": {
+    "template": "根據以下個人資料與人格特質，生成詳細背景故事：\n基本資料: {base_info}\n\n人格特點：\n- 主要特質：{traits}\n- 社交風格：{social}\n- 特殊能力：{abilities}\n\n要求：\n1. 包含童年經歷、重大人生事件、教育背景、家庭背景、對話模式\n2. 說明職業選擇與興趣愛好\n3. 字數500字或以上\n4. 使用臺灣在地化用語\n5. 年齡和人生經歷須符合\n6. 避免出現『總是』、『每次』等絕對語句，描述時請以『傾向於』、『在適當情境下』等方式表達個性特徵。\n"
+  },
+  "tone_generator": {
+    "system": "你是一位語言與人格建模專家。根據以下人物的基本資料，你要推論出這個人日常說話時的語氣特徵、常見詞彙風格、語調節奏，並描述其語言風格：",
+    "template": "基本資料：{character_data}",
+    "user": "人物資料：{character_data}\n\n用一段小短文，不要列點的，用1000字以內，具體描述這個人說話的語氣、節奏、常用語、說話方式等，可以提出範例句子。避免太抽象。請避免出現『總是』、『每次』等絕對語句，描述時請以『傾向於』、『在適當情境下』等方式表達個性特徵。"
+  },
+  "summarized_behavior_generator": {
+    "system": "你是一位專業的人物特徵摘要專家。請將提供的人物生平和語言行為進行精簡濃縮，保留關鍵特徵和核心行為模式。",
+    "template": "將以下人物的生平故事和語言行為濃縮為一段簡潔的描述，字數控制在200字以內：\n\n【生平故事】：\n{life_story}\n\n【語言行為】：\n{language_behavior}\n\n將核心的生平經歷和說話特點濃縮為一段簡短文字，使讀者能快速理解該人物的本質。\n"
+  },
+  "ai_parameter_analyzer": {
+    "system": "你是一位專業的 AI 參數優化專家。請分析提供的人物生平故事，並根據內容的複雜性、創造性和一致性需求，建議最適合的 top_p 和 temperature 參數值。",
+    "template": "分析以下人物生平故事，並根據內容特點提供建議的 AI 參數：\n\n【生平故事】：\n{life_story}\ntemperature// 從 0.1 到 0.9 的值，如果人格特質內有複雜/創意內容推薦較高值，精確/事實內容推薦較低值\ntop_p// 從 0.1 到 1.0 的值，根據內容的多樣性需求決定\n\n只回覆以下格式的 JSON 內容：\n{{\n  \"temperature\": 0.X, \n  \"top_p\": 0.X, \n  \"reason\": \"簡短的推薦理由（50字以內）\"\n}}\n"
+  }
+}
