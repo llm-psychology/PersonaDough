@@ -58,4 +58,4 @@ python -m pytest tests
 
 ## 授權
 
-GPL-3.0，沿用原始 `LICENSE`。舊 README 的 MIT 標示與實際授權檔不一致，這次依授權檔修正。
+本專案採用 GPL-3.0 授權，詳見 [LICENSE](LICENSE)。

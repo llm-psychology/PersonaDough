@@ -1,10 +1,12 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "personadough"
 version = "0.1.0"
+license = "GPL-3.0-only"
+license-files = ["LICENSE", "NOTICE.md"]
 description = "Shape a persona and export JSON"
 requires-python = ">=3.10"
 dependencies = ["openai>=1.40,<3", "python-dotenv>=1,<2", "numpy>=1.26,<3", "Faker>=25,<41", "aiofiles>=23,<26", "deprecated>=1.2,<4", "Pillow>=10,<13", "aiohttp>=3.9,<4"]
