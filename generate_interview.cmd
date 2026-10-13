@@ -1,2 +1,0 @@
-python -m interviewer.interviewer_generator
-PAUSE
