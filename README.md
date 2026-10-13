@@ -40,7 +40,7 @@ python -m personadough --provider openai --output-dir ./humanoid/humanoid_databa
 
 - `generator.py`：人格生成與匯出。
 - `prompts.json`：只含生成領域提示詞。
-- `contract.py`：既有 JSON 契約驗證。
+- `contract.py`：驗證人格 JSON 的必要欄位與資料型別。
 - `runtime/`：共用 OpenAI／Ollama adapter 與提示詞載入工具，供 PsychAnchor 重用，無 API 或模擬依賴。
 
 本地聊天使用 Ollama；共用 adapter 的 embedding／可選圖片功能目前仍使用 OpenAI。單純捏人格的預設流程只需所選的聊天後端。
@@ -54,7 +54,7 @@ python -m pytest tests
 
 此版本是畢專半成品的第一次拆分。離線測試使用固定模型回應驗證資料流，不代表真實模型品質或論文結果。
 
-原始版本為 `94f086f`；完整舊檔案另存主導覽 repo 的 `archive/PersonaDough-94f086f/`。拆分設計見 [persona-platform](https://github.com/llm-psychology/persona-platform)。
+拆分前的原始版本與 Git 歷史保存在 [PersonaDough-archive](https://github.com/llm-psychology/PersonaDough-archive)。專案整合方式見 [persona-platform](https://github.com/llm-psychology/persona-platform)。
 
 ## 授權
 
