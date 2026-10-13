@@ -54,7 +54,7 @@ python -m pytest tests
 
 此版本是畢專半成品的第一次拆分。離線測試使用固定模型回應驗證資料流，不代表真實模型品質或論文結果。
 
-拆分前的原始版本與 Git 歷史保存在 [PersonaDough-archive](https://github.com/llm-psychology/PersonaDough-archive)。專案整合方式見 [persona-platform](https://github.com/llm-psychology/persona-platform)。
+拆分前的原始版本與 Git 歷史保存在 [PersonaDough-archive](https://github.com/llm-psychology/PersonaDough-archive)。專案整合方式見 [Phersu](https://github.com/llm-psychology/Phersu)。
 
 ## 授權
 

@@ -1,7 +1,7 @@
 import re
 
 def validate_persona(persona):
-    """Validate the existing Chinese JSON contract without changing field names."""
+    """Validate the existing Chinese JSON format without changing field names."""
     if not isinstance(persona, dict):
         raise ValueError("Persona must be an object")
     base = persona.get("基本資料", {})
